@@ -2,12 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const compression = require('compression');
-require('dotenv').config();
+const path = require('path');
+
+// Load environment variables from backend/.env --> this only needed if run locally, if not ignored
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
 const exploreRoutesRoutes = require('../routes/exploreRoutesRoutes');
 
 const app = express();
-const PORT = 3008;
+const PORT = process.env.PORT || 3008;
 const startTime = Date.now();
 
 // Middleware

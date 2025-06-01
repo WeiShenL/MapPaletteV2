@@ -8,9 +8,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 @FeignClient(name = "follow-service", url = "${follow.service.url}")
 public interface FollowServiceClient {
     
-    @GetMapping("/following/{userId}")
+    @GetMapping("/api/follow/following/{userId}")
     FollowingResponse getFollowing(@PathVariable("userId") String userId);
     
-    @GetMapping("/followers/{userId}")
+    @GetMapping("/api/follow/followers/{userId}")
     FollowingResponse getFollowers(@PathVariable("userId") String userId);
 }

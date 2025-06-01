@@ -43,7 +43,7 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-const PORT = process.env.USER_SERVICE_PORT || 3001;
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`User service running on port ${PORT}`);
 });

@@ -1,9 +1,11 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
-const socialInteractionRoutes = require('../routes/socialInteractionRoutes');
+const path = require('path');
 
-dotenv.config();
+// Load environment variables from backend/.env --> ignored when run thru docker
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+
+const socialInteractionRoutes = require('../routes/socialInteractionRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3005;

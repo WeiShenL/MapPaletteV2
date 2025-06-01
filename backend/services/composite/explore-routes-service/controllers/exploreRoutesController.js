@@ -1,9 +1,14 @@
 const axios = require('axios');
 
-// Service URLs 
-const POST_SERVICE_URL = process.env.POST_SERVICE_URL 
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL 
-const INTERACTION_SERVICE_URL = process.env.INTERACTION_SERVICE_URL
+// Service url
+const POST_SERVICE_BASE = process.env.POST_SERVICE_URL || 'http://localhost:3002';
+const USER_SERVICE_BASE = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+const INTERACTION_SERVICE_BASE = process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003';
+
+// full service url with API paths
+const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api`;
+const USER_SERVICE_URL = `${USER_SERVICE_BASE}/api/users`;
+const INTERACTION_SERVICE_URL = `${INTERACTION_SERVICE_BASE}/api/interactions`;
 
 // Helper function to fetch user data for posts
 const enrichPostsWithUserData = async (posts) => {
@@ -13,7 +18,7 @@ const enrichPostsWithUserData = async (posts) => {
     
     // Fetch user data in parallel
     const userPromises = userIds.map(userId => 
-      axios.get(`${USER_SERVICE_URL}/api/users/${userId}`)
+      axios.get(`${USER_SERVICE_URL}/${userId}`)
         .then(response => ({ userId, userData: response.data }))
         .catch(error => {
           console.error(`Error fetching user ${userId}:`, error.message);
@@ -60,9 +65,9 @@ const enrichPostsWithInteractions = async (posts, currentUserId = null) => {
       try {
         // Fetch all interactions in parallel from interaction service
         const [likesResponse, commentsResponse, sharesResponse] = await Promise.all([
-          axios.get(`${INTERACTION_SERVICE_URL}/api/interactions/likes/post/${postId}`),
-          axios.get(`${INTERACTION_SERVICE_URL}/api/interactions/comments/post/${postId}`),
-          axios.get(`${INTERACTION_SERVICE_URL}/api/interactions/shares/post/${postId}`)
+          axios.get(`${INTERACTION_SERVICE_URL}/likes/post/${postId}`),
+          axios.get(`${INTERACTION_SERVICE_URL}/comments/post/${postId}`),
+          axios.get(`${INTERACTION_SERVICE_URL}/shares/post/${postId}`)
         ]);
         
         interactions.likes = likesResponse.data;
@@ -109,7 +114,7 @@ const getAllRoutes = async (req, res) => {
     console.log(`[GET_ALL_ROUTES] Fetching routes - page: ${page}, limit: ${limit}, sortBy: ${sortBy}, search: ${search}`);
     
     // Fetch all posts from post service
-    const postsResponse = await axios.get(`${POST_SERVICE_URL}/api/allposts`);
+    const postsResponse = await axios.get(`${POST_SERVICE_URL}/allposts`);
     let posts = postsResponse.data;
     
     // Search filter
@@ -204,7 +209,7 @@ const getRouteById = async (req, res) => {
     console.log(`[GET_ROUTE] Fetching route ${postId} for user ${userId || 'anonymous'}`);
     
     // Fetch post from post service
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/api/posts?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?id=${postId}`);
     let post = postResponse.data;
     
     // Enrich with user data

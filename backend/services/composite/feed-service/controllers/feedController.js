@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-// Service URLs - these should come from environment variables
+// Service URLs
 const POST_SERVICE_URL = process.env.POST_SERVICE_URL || 'http://localhost:3002';
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
 const INTERACTION_SERVICE_URL = process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003';

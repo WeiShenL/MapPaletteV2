@@ -9,9 +9,9 @@ import java.util.List;
 @FeignClient(name = "user-service", url = "${user.service.url}")
 public interface UserServiceClient {
     
-    @GetMapping("/all")
+    @GetMapping("/api/users/all")
     List<UserDto> getAllUsers();
     
-    @GetMapping("/{userId}")
+    @GetMapping("/api/users/{userId}")
     UserDto getUserById(@PathVariable("userId") String userId);
 }

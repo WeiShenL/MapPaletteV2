@@ -22,8 +22,8 @@ export const initAuthListener = () => {
       if (user) {
         // Fetch user profile from user-service microservice
         try {
-          const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001/api';
-          const response = await fetch(`${USER_SERVICE_URL}/users/${user.uid}`);
+          const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001';
+          const response = await fetch(`${USER_SERVICE_URL}/api/users/${user.uid}`);
           if (response.ok) {
             const userData = await response.json();
             userProfile.value = {

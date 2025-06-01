@@ -1,10 +1,16 @@
 const axios = require('axios');
 
-// Service URLs
-const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001/api/users';
-const POST_SERVICE_URL = process.env.POST_SERVICE_URL || 'http://localhost:3002/api/posts';
-const INTERACTION_SERVICE_URL = process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003/api/interactions';
-const FOLLOW_SERVICE_URL = process.env.FOLLOW_SERVICE_URL || 'http://localhost:3007/api/follow';
+// Service urls
+const USER_SERVICE_BASE = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+const POST_SERVICE_BASE = process.env.POST_SERVICE_URL || 'http://localhost:3002';
+const INTERACTION_SERVICE_BASE = process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003';
+const FOLLOW_SERVICE_BASE = process.env.FOLLOW_SERVICE_URL || 'http://localhost:3007';
+
+// full service URLs with API paths
+const USER_SERVICE_URL = `${USER_SERVICE_BASE}/api/users`;
+const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api/posts`;
+const INTERACTION_SERVICE_URL = `${INTERACTION_SERVICE_BASE}/api/interactions`;
+const FOLLOW_SERVICE_URL = `${FOLLOW_SERVICE_BASE}/api/follow`;
 
 // Helper function to award points to user
 async function updateUserPoints(userId, points) {

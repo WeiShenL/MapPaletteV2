@@ -1,5 +1,10 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
+
+// Load environment variables from backend/.env
+require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
+
 const feedRoutes = require('../routes/feedRoutes');
 
 const app = express();

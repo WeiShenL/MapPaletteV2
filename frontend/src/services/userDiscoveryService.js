@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const USER_DISCOVERY_SERVICE_URL = import.meta.env.VITE_USER_DISCOVERY_SERVICE_URL || 'http://localhost:3010/api';
+const USER_DISCOVERY_SERVICE_URL = import.meta.env.VITE_USER_DISCOVERY_SERVICE_URL || 'http://localhost:3010';
 
 export const userDiscoveryService = {
   /**
@@ -13,7 +13,7 @@ export const userDiscoveryService = {
    */
   async discoverUsers(userId, limit = 20, offset = 0, suggestionsOnly = false) {
     try {
-      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/discover/users/${userId}`, {
+      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/api/discover/users/${userId}`, {
         params: { limit, offset, suggestionsOnly }
       });
       return response.data;
@@ -31,7 +31,7 @@ export const userDiscoveryService = {
    */
   async getSuggestedUsers(userId, limit = 5) {
     try {
-      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/discover/users/${userId}/suggestions`, {
+      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/api/discover/users/${userId}/suggestions`, {
         params: { limit }
       });
       return response.data;
@@ -52,7 +52,7 @@ export const userDiscoveryService = {
     try {
       // Backend has a bug - it expects friendsLimit and othersLimit but uses them as limit and offset
       // So we need to send othersLimit as 0 to get the first page of other users
-      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/discover/users/${userId}/all`, {
+      const response = await axios.get(`${USER_DISCOVERY_SERVICE_URL}/api/discover/users/${userId}/all`, {
         params: { 
           friendsLimit: 100,  // This becomes 'limit' in the service
           othersLimit: 0      // This becomes 'offset' in the service - MUST be 0 to get results!

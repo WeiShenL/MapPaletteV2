@@ -7,7 +7,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 const postRoutes = require('../routes/postRoutes');
 
 const app = express();
-const PORT = process.env.POST_SERVICE_PORT || 3002;
+const PORT = process.env.PORT || 3002;
 const startTime = Date.now();
 
 // Middleware

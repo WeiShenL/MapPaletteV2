@@ -1,13 +1,13 @@
 import axios from 'axios';
 
-const SOCIAL_INTERACTION_SERVICE_URL = import.meta.env.VITE_SOCIAL_INTERACTION_URL || 'http://localhost:3005/api';
+const SOCIAL_INTERACTION_SERVICE_URL = import.meta.env.VITE_SOCIAL_INTERACTION_URL || 'http://localhost:3005';
 
 const followService = {
   // Follow a user
   async followUser(userId, targetUserId) {
     try {
       const response = await axios.post(
-        `${SOCIAL_INTERACTION_SERVICE_URL}/social/users/${targetUserId}/follow`,
+        `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/follow`,
         { userId }
       );
       return response.data;
@@ -21,7 +21,7 @@ const followService = {
   async unfollowUser(userId, targetUserId) {
     try {
       const response = await axios.delete(
-        `${SOCIAL_INTERACTION_SERVICE_URL}/social/users/${targetUserId}/unfollow`,
+        `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/unfollow`,
         { data: { userId } }
       );
       return response.data;
@@ -35,7 +35,7 @@ const followService = {
   async checkFollowStatus(userId, targetUserId) {
     try {
       const response = await axios.get(
-        `${SOCIAL_INTERACTION_SERVICE_URL}/social/users/${targetUserId}/follow-status`,
+        `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/follow-status`,
         { params: { userId } }
       );
       return response.data;
@@ -49,7 +49,7 @@ const followService = {
   async getFollowers(userId) {
     try {
       const response = await axios.get(
-        `${SOCIAL_INTERACTION_SERVICE_URL}/social/users/${userId}/followers`
+        `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${userId}/followers`
       );
       return response.data;
     } catch (error) {
@@ -62,7 +62,7 @@ const followService = {
   async getFollowing(userId) {
     try {
       const response = await axios.get(
-        `${SOCIAL_INTERACTION_SERVICE_URL}/social/users/${userId}/following`
+        `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${userId}/following`
       );
       return response.data;
     } catch (error) {
