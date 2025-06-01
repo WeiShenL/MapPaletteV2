@@ -1,0 +1,184 @@
+version: '3.8'
+
+services:
+  # Atomic Services
+  user-service:
+    build: ./services/atomic/user-service
+    container_name: mappalette-user-service
+    ports:
+      - "${USER_SERVICE_PORT}:${USER_SERVICE_PORT}"
+    environment:
+      - NODE_ENV=${NODE_ENV}
+      - USER_SERVICE_PORT=${USER_SERVICE_PORT}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  post-service:
+    build: ./services/atomic/post-service
+    container_name: mappalette-post-service
+    ports:
+      - "${POST_SERVICE_PORT:-3002}:${POST_SERVICE_PORT:-3002}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - POST_SERVICE_PORT=${POST_SERVICE_PORT:-3002}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  interaction-service:
+    build: ./services/atomic/interaction-service
+    container_name: mappalette-interaction-service
+    ports:
+      - "${INTERACTION_SERVICE_PORT:-3003}:${INTERACTION_SERVICE_PORT:-3003}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${INTERACTION_SERVICE_PORT:-3003}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  follow-service:
+    build: ./services/atomic/follow-service
+    container_name: mappalette-follow-service
+    ports:
+      - "${FOLLOW_SERVICE_PORT:-3007}:${FOLLOW_SERVICE_PORT:-3007}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${FOLLOW_SERVICE_PORT:-3007}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  # Composite Services
+  feed-service:
+    build: ./services/composite/feed-service
+    container_name: mappalette-feed-service
+    ports:
+      - "${FEED_SERVICE_PORT:-3004}:${FEED_SERVICE_PORT:-3004}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${FEED_SERVICE_PORT:-3004}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - POST_SERVICE_URL=http://post-service:${POST_SERVICE_PORT:-3002}
+      - INTERACTION_SERVICE_URL=http://interaction-service:${INTERACTION_SERVICE_PORT:-3003}
+      - FOLLOW_SERVICE_URL=http://follow-service:${FOLLOW_SERVICE_PORT:-3007}
+    depends_on:
+      - user-service
+      - post-service
+      - interaction-service
+      - follow-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  social-interaction-service:
+    build: ./services/composite/social-interaction-service
+    container_name: mappalette-social-interaction-service
+    ports:
+      - "${SOCIAL_INTERACTION_SERVICE_PORT:-3005}:${SOCIAL_INTERACTION_SERVICE_PORT:-3005}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${SOCIAL_INTERACTION_SERVICE_PORT:-3005}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - POST_SERVICE_URL=http://post-service:${POST_SERVICE_PORT:-3002}
+      - INTERACTION_SERVICE_URL=http://interaction-service:${INTERACTION_SERVICE_PORT:-3003}
+      - FOLLOW_SERVICE_URL=http://follow-service:${FOLLOW_SERVICE_PORT:-3007}
+    depends_on:
+      - user-service
+      - post-service
+      - interaction-service
+      - follow-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  profile-service:
+    build: ./services/composite/profile-service
+    container_name: mappalette-profile-service
+    ports:
+      - "${PROFILE_SERVICE_PORT:-3006}:${PROFILE_SERVICE_PORT:-3006}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PROFILE_SERVICE_PORT:-3006}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - POST_SERVICE_URL=http://post-service:${POST_SERVICE_PORT:-3002}
+      - INTERACTION_SERVICE_URL=http://interaction-service:${INTERACTION_SERVICE_PORT:-3003}
+      - FOLLOW_SERVICE_URL=http://follow-service:${FOLLOW_SERVICE_PORT:-3007}
+    depends_on:
+      - user-service
+      - post-service
+      - interaction-service
+      - follow-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  explore-routes-service:
+    build: ./services/composite/explore-routes-service
+    container_name: mappalette-explore-routes-service
+    ports:
+      - "${EXPLORE_ROUTES_SERVICE_PORT:-3008}:${EXPLORE_ROUTES_SERVICE_PORT:-3008}"
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${EXPLORE_ROUTES_SERVICE_PORT:-3008}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - POST_SERVICE_URL=http://post-service:${POST_SERVICE_PORT:-3002}
+    depends_on:
+      - user-service
+      - post-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  leaderboard-service:
+    build: ./services/composite/leaderboard-service
+    container_name: mappalette-leaderboard-service
+    ports:
+      - "${LEADERBOARD_SERVICE_PORT:-8080}:${LEADERBOARD_SERVICE_PORT:-8080}"
+    environment:
+      - PORT=${LEADERBOARD_SERVICE_PORT:-8080}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - POST_SERVICE_URL=http://post-service:${POST_SERVICE_PORT:-3002}
+    depends_on:
+      - user-service
+      - post-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+  user-discovery-service:
+    build: ./services/composite/user-discovery-service
+    container_name: mappalette-user-discovery-service
+    ports:
+      - "${USER_DISCOVERY_SERVICE_PORT:-3010}:${USER_DISCOVERY_SERVICE_PORT:-3010}"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
+      - SERVER_PORT=${USER_DISCOVERY_SERVICE_PORT:-3010}
+      - USER_SERVICE_URL=http://user-service:${USER_SERVICE_PORT:-3001}
+      - FOLLOW_SERVICE_URL=http://follow-service:${FOLLOW_SERVICE_PORT:-3007}
+    depends_on:
+      - user-service
+      - follow-service
+    networks:
+      - mappalette-network
+    restart: unless-stopped
+
+networks:
+  mappalette-network:
+    driver: bridge
+
+volumes:
+  node_modules:

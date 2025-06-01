@@ -1,0 +1,716 @@
+@media (max-width: 576px) {
+    /* Back to top button mobile styles */
+    /* .back-to-top {
+        bottom: 25px;
+        right: 25px;
+        width: 40px;
+        height: 40px;
+    }
+
+    .back-to-top i {
+        font-size: 16px;
+    } */
+
+    /* Scroll indicator mobile styles */
+    .scroll-indicator {
+        bottom: 25vh;
+        left: 2.5vh;
+        gap: 6px;
+    }
+
+    .scroll-arrow {
+        width: 40px;
+        height: 40px;
+    }
+
+    .scroll-arrow i {
+        font-size: 14px;
+    }
+
+    .scroll-text {
+        font-size: 10px;
+    }
+}
+
+
+
+/* HERO CAROUSEL */
+@media (max-width: 576px) {
+    /* Base Height Adjustments */
+    .hero-main-carousel,
+    .hero-carousel-item {
+        height: 100vh;
+        min-height: 500px;
+        max-height: 75vh;
+    }
+    
+    /* Global Content Styling */
+    .hero-slide-content {
+        text-align: center;
+        height: 100%;
+        position: relative;
+    }
+    
+    .hero-slide-content h1 {
+        font-size: 2rem !important;
+        margin-bottom: 1rem;
+        width: 85%;
+        max-width: 300px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .hero-slide-content p {
+        font-size: 1.1rem !important;
+        margin-bottom: 1.5rem;
+        width: 85%;
+        max-width: 280px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    /* Button Group Base Styling */
+    .hero-btn-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        width: 85%;
+        max-width: 240px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .btn {
+        width: 100%;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+    }
+
+    /* Global positioning for all slides */
+    [class^="slide-"] .hero-title,
+    [class^="slide-"] .hero-subtitle {
+        width: 85% !important;
+        max-width: 300px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        left: 50% !important;
+        text-align: center !important;
+    }
+
+    /* Global Button Group Positioning for ALL slides */
+    [class^="slide-"] .hero-btn-group {
+        position: absolute;
+        bottom: 15%;
+        left: 50%;
+        transform: translateX(-50%) translateY(50px);
+        opacity: 0;
+        transition: transform 0.5s ease, opacity 0.5s ease;
+    }
+    
+    [class^="slide-"].active .hero-btn-group {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+    }
+
+    /* Slide 0 - Shutter Design */
+    .slide-0 .hero-title {
+        position: absolute;
+        top: 25%;
+        transform: translateX(-50%);
+    }
+    
+    .slide-0 .hero-subtitle {
+        position: absolute;
+        top: 45%;
+        transform: translateX(-50%);
+    }
+
+    /* Slide 1 - Diagonal Design */
+    .slide-1 .hero-title,
+    .slide-1 .hero-subtitle {
+        position: absolute;
+        top: 50%;
+        transform: translate(-50%, -50%) rotate(-15deg) scale(0.5);
+    }
+    
+    .slide-1 .hero-title {
+        top: 45%;  /* Keeping title position */
+    }
+    
+    .slide-1 .hero-subtitle {
+        top: 70%;  /* Changed from implicit 50% to 65% */
+    }
+    
+    .slide-1.active .hero-title,
+    .slide-1.active .hero-subtitle {
+        transform: translate(-50%, -50%) rotate(0) scale(1);
+        opacity: 1;
+    }
+
+    /* Slide 2 - Bottom Up Fade */
+    .slide-2 .hero-title {
+        position: absolute;
+        top: 25%;
+        transform: translate(-50%, 100px);
+    }
+    
+    .slide-2 .hero-subtitle {
+        position: absolute;
+        top: 45%;
+        transform: translate(-50%, 100px);
+    }
+    
+    .slide-2.active .hero-title,
+    .slide-2.active .hero-subtitle {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+
+    /* Slide 3 - Corner Design - Updated */
+    .slide-3 .hero-title,
+    .slide-3 .hero-subtitle {
+        position: absolute !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) scale(0.3) !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        text-align: center !important;
+        width: 85% !important;
+        max-width: 300px !important;
+        right: auto !important;
+        margin: 0 !important;
+    }
+    
+    .slide-3 .hero-title {
+        top: 35% !important;  /* Changed from 25% to 35% */
+    }
+    
+    .slide-3 .hero-subtitle {
+        top: 55% !important;  /* Changed from 45% to 55% */
+    }
+    
+    .slide-3.active .hero-title,
+    .slide-3.active .hero-subtitle {
+        transform: translate(-50%, -50%) scale(1) !important;
+        opacity: 1;
+    }
+
+    /* Slide 4 - Cascade */
+    .slide-4 .hero-title,
+    .slide-4 .hero-subtitle {
+        position: absolute;
+        transform: translate(-50%, -200px);
+    }
+    
+    .slide-4 .hero-title {
+        top: 35%;  /* Changed from 25% to 35% */
+    }
+    
+    .slide-4 .hero-subtitle {
+        top: 50%;  /* Changed from 45% to 55% */
+    }
+    
+    .slide-4.active .hero-title,
+    .slide-4.active .hero-subtitle {
+        transform: translate(-50%, 0);
+        opacity: 1;
+    }
+
+    /* Slide 5 - Zoom */
+    .slide-5 .hero-title,
+    .slide-5 .hero-subtitle {
+        position: absolute;
+        transform: translate(-50%, -50%) scale(2);
+        opacity: 0;
+    }
+    
+    .slide-5 .hero-title {
+        top: 35%;  /* Changed from 25% to 35% */
+    }
+    
+    .slide-5 .hero-subtitle {
+        top: 55%;  /* Changed from 45% to 55% */
+    }
+    
+    .slide-5.active .hero-title,
+    .slide-5.active .hero-subtitle {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    
+    /* Remove any accidental button positioning inheritance */
+    .slide-5 .hero-btn-group {
+        bottom: 15% !important;
+    }
+
+    /* Slide 6 - Spiral */
+    .slide-6 .hero-title,
+    .slide-6 .hero-subtitle {
+        position: absolute;
+        transform: translate(-50%, -50%) rotate(180deg);
+        opacity: 0;
+    }
+    
+    .slide-6 .hero-title {
+        top: 35%;  /* Changed from 25% to 35% */
+    }
+    
+    .slide-6 .hero-subtitle {
+        top: 55%;  /* Changed from 45% to 55% */
+    }
+    
+    .slide-6.active .hero-title,
+    .slide-6.active .hero-subtitle {
+        transform: translate(-50%, -50%) rotate(0);
+        opacity: 1;
+    }
+    
+    /* Remove any accidental button positioning inheritance */
+    .slide-6 .hero-btn-group {
+        bottom: 15% !important;
+    }
+
+    /* Slide 7 - Split - Updated */
+    .slide-7 .hero-title,
+    .slide-7 .hero-subtitle {
+        position: absolute !important;
+        left: 50% !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+        text-align: center !important;
+        width: 85% !important;
+        max-width: 300px !important;
+        right: auto !important;
+        margin: 0 !important;
+    }
+    
+    .slide-7 .hero-title {
+        top: 35% !important;  /* Changed from 25% to 35% */
+        transform: translate(-150%, -50%) !important;
+    }
+    
+    .slide-7 .hero-subtitle {
+        top: 55% !important;  /* Changed from 45% to 55% */
+        transform: translate(50%, -50%) !important;
+    }
+    
+    .slide-7.active .hero-title,
+    .slide-7.active .hero-subtitle {
+        transform: translate(-50%, -50%) !important;
+        opacity: 1;
+    }
+
+    /* Carousel Controls */
+    .carousel-indicators {
+        bottom: 1rem;
+    }
+    
+    .carousel-indicators button {
+        width: 8px;
+        height: 8px;
+        margin: 0 4px;
+    }
+    
+    .hero-main-carousel .carousel-control-prev,
+    .hero-main-carousel .carousel-control-next {
+        width: 15%;
+    }
+    
+    .hero-main-carousel .carousel-control-prev-icon,
+    .hero-main-carousel .carousel-control-next-icon {
+        width: 2rem;
+        height: 2rem;
+    }
+
+    /* Force text containment */
+    .hero-slide-content h1,
+    .hero-slide-content p {
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+        overflow-wrap: break-word !important;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------------------- */
+/* BACK TO TOP BUTTON */
+@media (max-width: 576px) {
+    .back-to-top {
+        width: 50px;
+        height: 50px;
+        bottom: 20vh;
+        right: 5vh;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------------------- */
+/* KEY FEATURES */
+/* KEY FEATURES */
+@media (max-width: 575.98px) {
+    .key-features-section {
+        padding: 2rem 0;
+        overflow: hidden; /* Prevent potential overflow during animation */
+    }
+
+    .key-features-content {
+        padding: 0 1rem;
+    }
+
+    .key-features-content h2 {
+        font-size: 1.75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .key-features-content .row {
+        margin-top: 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    /* More specific selectors to override Bootstrap */
+    .key-features-content .row > .col-sm-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        padding: 1rem;
+        margin-bottom: 1rem; /* Reduced from 1.5rem */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        min-height: 180px; /* Set consistent height */
+        opacity: 0;
+        transform: translateY(30px); /* Reduced from 50px */
+        transition: opacity 0.8s ease-out, transform 0.6s ease-out;
+    }
+
+    .features-image {
+        width: 40px;
+        height: 40px;
+        margin-top: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .key-features-content .col-sm-4 h4 {
+        font-size: 1.25rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .key-features-content .col-sm-4 p {
+        font-size: 0.95rem;
+        line-height: 1.4;
+        margin-bottom: 0;
+        max-width: 280px;
+    }
+
+    .key-features-content .col-sm-4:hover {
+        transform: scale(1.02);
+        transition: transform 0.3s ease;
+    }
+}
+
+/* Additional breakpoint to catch exactly 576px */
+@media (width: 576px) {
+    .key-features-content .row > .col-sm-4 {
+        flex: 0 0 100% !important;
+        max-width: 100% !important;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        min-height: 180px;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------------------- */
+/* REVIEWS SECTION */
+@media (max-width: 576px) {
+    /* Gallery Section Container Adjustments */
+    .gallery-section {
+        padding-top: 3vh;
+        min-height: 60vh;
+    }
+
+    .gallery-header {
+        margin-top: 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .gallery-header h1 {
+        font-size: 1.5rem;
+    }
+
+    .gallery-header h2 {
+        font-size: 1rem;
+    }
+
+    /* Gallery Container Adjustments */
+    .gallery-outer-container {
+        height: 70vh;
+        padding: 0 5%;
+    }
+
+    /* Gallery Item Adjustments */
+    .gallery-item-wrapper {
+        width: 100px;
+        height: 70%;
+    }
+
+    .gallery-item-wrapper.expanded {
+        width: 250px;
+    }
+
+    .gallery-item-container {
+        height: 60%;
+    }
+
+    /* Review Content Adjustments */
+    .review-content {
+        min-height: 60px;
+        padding: 0.75rem;
+    }
+
+    .review-content h4 {
+        font-size: 0.9rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .review-content p {
+        font-size: 0.8rem;
+        line-height: 1.3;
+        padding: 0 0.3rem;
+    }
+
+    /* Indicator Adjustments */
+    .indicator-container {
+        bottom: 5vh;
+    }
+
+    .indicator-dot {
+        height: 1px;
+    }
+
+    .indicator-dot.active {
+        width: 1.5rem;
+    }
+
+    .indicator-dot.inactive {
+        width: 0.75rem;
+    }
+
+    /* Animation Adjustments */
+    .gallery-item-wrapper:not(.expanded) {
+        transform: scale(0.9);
+    }
+
+    .gallery-item-container {
+        transition: all 0.2s ease-out;
+    }
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------------------- */
+/* STEPPER SECTION */
+/* STEPPER SECTION */
+@media (max-width: 576px) {
+    /* Stepper Section Container */
+    .stepper-section {
+        padding: 2rem 0;
+    }
+
+    .stepper-section h2 {
+        font-size: 1.75rem;
+        margin-bottom: 2rem;
+    }
+
+    .stepper-wrapper {
+        padding: 20px 10px;
+        max-width: 100%;
+    }
+
+    /* Stepper Items */
+    .stepper-item {
+        display: flex;
+        gap: 1rem;
+        padding-bottom: 1.5rem;
+        position: relative;
+        width: 100%;
+    }
+
+    /* Adjust vertical line for mobile */
+    .stepper-item:not(:last-child)::before {
+        content: '';
+        position: absolute;
+        left: 12px;
+        top: 26px; /* Height of the circle */
+        height: calc(100% - 26px); /* Subtract circle height */
+        width: 2px;
+        background: #e0e0e0;
+        z-index: -1;
+    }
+
+    /* Step Counter Circle */
+    .step-counter {
+        width: 26px;
+        height: 26px;
+        flex-shrink: 0;
+        z-index: 1;
+    }
+
+    /* Step Content */
+    .step-content {
+        flex: 1;
+        width: calc(100% - 40px); /* Counter width (26px) + gap (14px) */
+        min-width: 0; /* Allow content to shrink below flex basis */
+    }
+
+    .step-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .step-description {
+        font-size: 0.9rem;
+        line-height: 1.4;
+        margin-bottom: 0.4rem;
+    }
+
+    .step-title,
+    .step-description {
+        width: 100%;
+        word-wrap: break-word;
+    }
+
+
+    .step-details {
+        display: inline-block;
+        width: calc(100% - 40px); /* Counter width (26px) + gap (14px) */
+        max-width: min-content; /* Forces content-based width */
+        padding: 0.75rem;
+        font-size: 0.85rem;
+        line-height: 1.4;
+        background: #f8f9fa;
+        border-radius: 6px;
+        word-wrap: break-word;
+        white-space: normal;
+    }
+
+    /* Container padding adjustments */
+    .container {
+        padding-left: 15px;
+        padding-right: 15px;
+    }
+
+    /* Column adjustments */
+    .col-md-10 {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    /* Hover effect adjustment for touch devices */
+    .stepper-item:hover .step-counter {
+        transform: scale(1.1);
+        transition: transform 0.2s ease;
+    }
+}
+
+
+/* --------------------------------------------------------------------------------------------------------------------------------------- */
+/* ABOUT US SECTION */
+@media (max-width: 576px) {
+    /* About Us Section Container */
+    .about-us {
+        padding: 2rem 0;
+    }
+
+    /* Section Header */
+    .about-us h2 {
+        font-size: 1.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .about-us-description {
+        font-size: 0.9rem;
+        line-height: 1.4;
+        margin: 1rem 1.5rem;
+    }
+
+    /* Carousel Container */
+    .team-carousel {
+        padding: 0 1rem;
+    }
+
+    .carousel-inner {
+        min-height: 400px; /* Minimum height to prevent collapsing */
+    }
+
+    .carousel-item {
+        text-align: center;
+        padding: 1rem 0;
+    }
+
+    /* Team Member Image */
+    .person-image {
+        width: 200px; /* Fixed width */
+        height: 200px; /* Fixed height */
+        object-fit: cover; /* Maintain aspect ratio */
+        margin: 0 auto;
+        border-radius: 8px;
+    }
+
+    /* Team Member Details */
+    .person-name {
+        font-size: 1.25rem;
+        margin: 12px 0 8px 0;
+    }
+
+    .person-description {
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+    }
+
+    /* Carousel Controls */
+    .about-us .carousel-control-prev,
+    .about-us .carousel-control-next {
+        width: 15%;
+        opacity: 0.8;
+    }
+
+    .about-us .carousel-control-prev {
+        left: -10px;
+    }
+
+    .about-us .carousel-control-next {
+        right: -10px;
+    }
+
+    .about-us .carousel-control-prev-icon,
+    .about-us .carousel-control-next-icon {
+        width: 2rem;
+        height: 2rem;
+        background-color: rgba(0, 0, 0, 0.3);
+        border-radius: 50%;
+    }
+
+    /* Container adjustments */
+    .about-us .container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    /* Description breaks adjustment */
+    .about-us-description br {
+        display: none;
+    }
+
+    /* Column size adjustment */
+    .about-us .col-sm-5 {
+        width: 100%;
+        padding: 0;
+    }
+}

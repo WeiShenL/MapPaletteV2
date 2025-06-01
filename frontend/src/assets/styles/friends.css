@@ -1,0 +1,180 @@
+/* Define Gradient Variables */
+:root {
+    --primary-gradient: linear-gradient(135deg, #FF6B6B, #FF8E53, #FFD54F);
+    --primary-gradient-hover: linear-gradient(135deg, #FFD54F, #FF8E53, #FF6B6B);
+}
+
+/* General Styles */
+body {
+    background-color: #f0f2f5;
+    margin: 0;
+    padding: 0;
+    font-family: 'Roboto', sans-serif;
+    color: var(--text-color);
+}
+
+/* Adjust the main content container for fixed navbar */
+#app-container {
+    padding-top: 67px; /* Adjust this value if navbar height changes */
+}
+
+.sample-header {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    background-image: url('/resources/friends.jpeg');
+    background-position: center;
+    background-size: cover;
+    background-repeat: no-repeat;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 1px 1px 5px rgba(0, 0, 0, 0.7); /* Added text shadow for readability */
+}
+
+/* Header Overlay */
+.sample-header::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: #00000080;
+}
+
+/* Header Content */
+.sample-header-section {
+    z-index: 1;
+    text-align: center;
+}
+
+.sample-header-section h1 {
+    font-size: 3.5rem;
+}
+
+.sample-header-section p {
+    font-weight: 300;
+}
+
+.btn-primary {
+    background: var(--primary-gradient);
+    border: none;
+    color: #fff;
+    border-radius: 25px;
+    padding: 0.5em 1.5em;
+    font-size: 1rem;
+    transition: background 0.3s;
+}
+
+.btn-primary:hover {
+    background: var(--primary-gradient-hover);
+    color: #fff;
+}
+
+.btn-outline-primary {
+    border: 2px solid var(--primary-color);
+    color: var(--primary-color);
+    background: transparent;
+    border-radius: 25px;
+    padding: 0.5em 1.5em;
+    font-size: 1rem;
+    transition: background 0.3s, color 0.3s, transform 0.2s;
+}
+
+.input-group .btn-primary {
+    background-color: #FF8E53 !important; /* Enforce orange color */
+}
+
+.btn-outline-primary:hover {
+    background: var(--primary-color);
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.input-group .btn-primary {
+    background-color: #FF8E53; /* Set your orange color here */
+    border: none;
+    color: #fff;
+    border-radius: 0 25px 25px 0;
+    transition: background 0.3s;
+}
+
+.input-group .btn-primary:hover {
+    background-color: #FF6B3A; 
+    color: #fff;
+}
+
+.sample-section {
+    padding: 40px 20px;
+}
+
+.input-group .form-control {
+    border-radius: 25px 0 0 25px;
+}
+
+.input-group .btn-outline-secondary {
+    border-radius: 0;
+}
+
+.input-group .btn-primary {
+    border-radius: 0 25px 25px 0;
+}
+
+/* Hover and Focus Styles */
+.input-group:focus-within {
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+    border-radius: 25px;
+}
+
+/* Ensure no default outline for a clean look */
+.input-group .form-control:focus,
+.input-group .btn:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+.friend-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    text-align: center;
+    padding: 1rem;
+    height: 100%;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.friend-card .card-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.friend-card .profile-pic {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 0.5rem;
+}
+
+.friend-card .btn {
+    width: 100%;
+    max-width: 140px; 
+    margin: 0.25rem 0; 
+}
+
+.friend-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 6px 25px rgba(0, 0, 0, 0.15);
+}
+
+/* Truncate text utility */
+.truncate-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}

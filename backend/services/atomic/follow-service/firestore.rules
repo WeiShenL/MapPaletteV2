@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Follow users collection
+    match /follow_users/{userId} {
+      // Allow reading follow data (public information)
+      allow read: if true;
+      
+      // Only allow the service to write (not direct client writes)
+      // In production, you might want to use service account authentication
+      allow write: if false;
+    }
+    
+    // Legacy follows collection (if still needed during migration)
+    match /follows/{followId} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
