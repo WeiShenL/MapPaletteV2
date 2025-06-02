@@ -286,7 +286,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, watch } from 'vue'
 import axios from 'axios'
 import { useFeedStore } from '@/stores/feedStore'
 import NavBar from '@/components/layout/NavBar.vue'
@@ -624,13 +624,32 @@ export default {
     }
     
     const fetchPosts = async (loadMore = false, forceRefresh = false) => {
+      // load user from localStorage
       if (!currentUser.value?.id) {
-        console.log('User not loaded yet')
+        const cachedUser = localStorage.getItem('currentUser')
+        if (cachedUser) {
+          try {
+            const user = JSON.parse(cachedUser)
+            if (user?.id) {
+              currentUser.value = user
+              window.currentUser = user
+              updateUserProfile(user)
+            }
+          } catch (e) {
+            console.error('Error parsing cached user:', e)
+          }
+        }
+      }
+      
+      // check if we have a user
+      const userId = currentUser.value?.id || window.currentUser?.id
+      if (!userId) {
+        console.log('No user data available')
         return
       }
       
       try {
-        const currentUserId = currentUser.value.id
+        const currentUserId = userId
         
         if (!loadMore) {
           isLoadingActivities.value = true
@@ -789,11 +808,17 @@ export default {
           // Load suggested users first
           await loadSuggestedUsers()
           
+          // Check if feed needs refresh (cache was cleared)
+          const forceRefresh = feedStore.needsRefresh
+          if (forceRefresh) {
+            feedStore.needsRefresh = false // Reset the flag
+          }
+          
           // Then try to fetch posts
           if (postId.value) {
             await fetchSinglePost(postId.value)
           } else {
-            await fetchPosts()
+            await fetchPosts(false, forceRefresh)
           }
         } catch (error) {
           console.error('Error during initialization:', error)
@@ -842,6 +867,21 @@ export default {
         onUnmounted(() => {
           window.removeEventListener('userLoaded', handleUserLoaded)
         })
+      }
+    })
+    
+    // wch for route changes to refetch data when navigating back
+    watch(() => feedStore.posts, (newPosts) => {
+      if (newPosts.length === 0 && !feedStore.isLoading && currentUser.value?.id) {
+        console.log('No posts in store but user is loaded, fetching...')
+        fetchPosts(false, true)
+      }
+    }, { immediate: true })
+    
+    // refetch when component is activated 
+    onActivated(() => {
+      if (feedStore.posts.length === 0 && currentUser.value?.id) {
+        fetchPosts(false, true)
       }
     })
     

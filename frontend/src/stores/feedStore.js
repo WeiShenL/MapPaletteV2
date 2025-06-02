@@ -7,8 +7,10 @@ export const useFeedStore = defineStore('feed', {
     currentOffset: 0,
     hasMorePosts: true,
     lastFetchTime: null,
-    cacheExpiry: 5 * 60 * 1000, // 5 minutes cache
-    isLoading: false
+    cacheExpiry: 5 * 60 * 1000, 
+    isLoading: false,
+    // cache clear
+    needsRefresh: false 
   }),
 
   getters: {
@@ -33,6 +35,7 @@ export const useFeedStore = defineStore('feed', {
         this.currentOffset = this.posts.length
         this.hasMorePosts = feedData.pagination?.hasMore || false
         this.lastFetchTime = Date.now()
+        this.needsRefresh = false 
         
         return { posts: this.posts, fromCache: false }
       } catch (error) {
@@ -76,6 +79,7 @@ export const useFeedStore = defineStore('feed', {
       this.currentOffset = 0
       this.hasMorePosts = true
       this.lastFetchTime = null
+      this.needsRefresh = true // Set flag when cache is cleared
     },
 
     updatePostInteraction(postId, updates) {
