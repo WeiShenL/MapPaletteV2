@@ -172,6 +172,7 @@ import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { getCurrentUser } from '@/services/authService';
 import { userDiscoveryService } from '@/services/userDiscoveryService';
+import socialInteractionService from '@/services/socialInteractionService';
 import LoadingQuotes from '@/components/common/LoadingQuotes.vue';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
@@ -269,13 +270,7 @@ export default {
       friendToUnfollow.value = null;
 
       try {
-        const socialInteractionUrl = import.meta.env.VITE_SOCIAL_INTERACTION_URL || 'http://localhost:3005/api';
-        const url = `${socialInteractionUrl}/social/users/${friendId}/unfollow`;
-        console.log('Unfollow URL:', url);
-        
-        await axios.delete(url, {
-          data: { userId: currentUserId }
-        });
+        await socialInteractionService.unfollowUser(friendId, currentUserId);
         console.log(`Successfully unfollowed user with ID: ${friendId}`);
       } catch (error) {
         console.error('Error unfollowing user:', error);
@@ -315,10 +310,7 @@ export default {
       }, 1000);
 
       try {
-        const socialInteractionUrl = import.meta.env.VITE_SOCIAL_INTERACTION_URL || 'http://localhost:3005/api';
-        await axios.post(`${socialInteractionUrl}/social/users/${friendId}/follow`, {
-          userId: currentUserId
-        });
+        await socialInteractionService.followUser(friendId, currentUserId);
         console.log(`Successfully followed user with ID: ${friendId}`);
       } catch (error) {
         console.error('Error following user:', error);

@@ -293,7 +293,7 @@ export default {
     const username = ref('')
     const submitting = ref(false)
     const formValidated = ref(false)
-    const POST_SERVICE_URL = ref(import.meta.env.VITE_POST_SERVICE_URL || 'http://localhost:3002/api')
+    const POST_SERVICE_URL = ref((import.meta.env.VITE_POST_SERVICE_URL || 'http://localhost:3002') + '/api')
     const deleteCountdown = ref(0)
     const deleteTimeout = ref(null)
     const deleteModalTitle = ref("Delete post?")
@@ -674,6 +674,7 @@ export default {
         const postIdForImage = Date.now()
         await captureMapAsImage(postIdForImage)
 
+        console.log('Creating post with URL:', `${POST_SERVICE_URL.value}/create/${userID.value}`);
         const response = await axios.post(`${POST_SERVICE_URL.value}/create/${userID.value}`, {
           title: postTitle.value,
           description: postDescription.value,
