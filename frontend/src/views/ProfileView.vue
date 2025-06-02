@@ -217,6 +217,7 @@
 <script>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useFeedStore } from '@/stores/feedStore'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
@@ -448,11 +449,19 @@ export default {
           isFollowing.value = false
           userProfile.value.stats.followers = Math.max(0, userProfile.value.stats.followers - 1)
           setAlert('success', 'User unfollowed successfully!')
+          
+          // Clear the feed cache so homepage will refresh
+          const feedStore = useFeedStore()
+          feedStore.clearCache()
         } else {
           await followService.followUser(currentUser.value.id, profileUserId.value)
           isFollowing.value = true
           userProfile.value.stats.followers += 1
           setAlert('success', 'User followed successfully!')
+          
+          // Clear the feed cache so homepage will refresh
+          const feedStore = useFeedStore()
+          feedStore.clearCache()
         }
       } catch (error) {
         console.error('Error toggling follow:', error)

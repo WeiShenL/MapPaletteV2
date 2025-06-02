@@ -1,4 +1,5 @@
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { initAuthListener } from './services/authService'
@@ -21,6 +22,9 @@ import '@/assets/styles/navbar-index.css'
 // Initialize auth listener before mounting the app
 initAuthListener().then(() => {
   const app = createApp(App)
+  const pinia = createPinia()
+  
+  app.use(pinia)
   app.use(router)
   app.mount('#app')
 })

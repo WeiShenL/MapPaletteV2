@@ -171,6 +171,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
 import { getCurrentUser } from '@/services/authService';
+import { useFeedStore } from '@/stores/feedStore';
 import { userDiscoveryService } from '@/services/userDiscoveryService';
 import socialInteractionService from '@/services/socialInteractionService';
 import LoadingQuotes from '@/components/common/LoadingQuotes.vue';
@@ -272,6 +273,10 @@ export default {
       try {
         await socialInteractionService.unfollowUser(friendId, currentUserId);
         console.log(`Successfully unfollowed user with ID: ${friendId}`);
+        
+        // Clear the feed cache so homepage will refresh
+        const feedStore = useFeedStore();
+        feedStore.clearCache();
       } catch (error) {
         console.error('Error unfollowing user:', error);
         alert('An error occurred while trying to unfollow the user. Please try again.');
@@ -312,6 +317,10 @@ export default {
       try {
         await socialInteractionService.followUser(friendId, currentUserId);
         console.log(`Successfully followed user with ID: ${friendId}`);
+        
+        // Clear the feed cache so homepage will refresh
+        const feedStore = useFeedStore();
+        feedStore.clearCache();
       } catch (error) {
         console.error('Error following user:', error);
         alert('An error occurred while trying to follow the user. Please try again.');

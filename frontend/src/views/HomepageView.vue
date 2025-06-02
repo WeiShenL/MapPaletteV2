@@ -146,6 +146,17 @@
 
                   <!-- Main content area using vue components -->
                   <div class="col-xl-8 col-md-8 content">
+                      <!-- Feed Header with Refresh Button -->
+                      <div v-if="activities.length > 0" class="d-flex justify-content-between align-items-center mb-3">
+                          <h5 class="mb-0">Your Feed</h5>
+                          <button @click="refreshFeed" 
+                                  class="btn btn-link btn-sm text-decoration-none"
+                                  :disabled="isLoadingActivities">
+                              <i class="bi bi-arrow-clockwise" :class="{ 'spin': isLoadingActivities }"></i>
+                              {{ isLoadingActivities ? 'Refreshing...' : 'Refresh' }}
+                          </button>
+                      </div>
+                      
                       <!-- New User Tutorial Section (show only if user has no friends/routes) -->
                       <div v-if="!isLoadingActivities">
                           <!-- Welcome & No Activities Section -->
@@ -277,6 +288,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { useFeedStore } from '@/stores/feedStore'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
@@ -294,6 +306,9 @@ export default {
     CommentModal
   },
   setup() {
+    // Store
+    const feedStore = useFeedStore()
+    
     // State
     const isLoadingActivities = ref(false)
     // Local microservice endpoints
@@ -310,9 +325,9 @@ export default {
     const alertMessage = ref('')
     const suggestedUsers = ref([])
     const suggestedUsersLoaded = ref(false)
-    const activities = ref([])
-    const isLoadingMore = ref(false)
-    const hasMorePosts = ref(true)
+    const activities = computed(() => feedStore.posts)
+    const isLoadingMore = computed(() => feedStore.isLoading)
+    const hasMorePosts = computed(() => feedStore.hasMorePosts)
     const currentOffset = ref(0)
     
     // User profile
@@ -519,8 +534,12 @@ export default {
         console.log('[FOLLOW] Current user after refresh:', currentUser.value)
         console.log('[FOLLOW] Current user ID after refresh:', currentUser.value.id)
         
-        // Show success message with refresh warning
-        setAlert('success', 'User followed successfully! Refresh the page to see their posts.')
+        // Clear cache and refresh posts to include new followed user's posts
+        feedStore.clearCache()
+        await fetchPosts(false, true) // Force refresh
+        
+        // Show success message
+        setAlert('success', 'User followed successfully! Their posts will now appear in your feed.')
         
         // Refresh suggested users
         await loadSuggestedUsers()
@@ -545,8 +564,9 @@ export default {
         // Show success message
         setAlert('success', 'User unfollowed successfully!')
         
-        // Refresh activities
-        await fetchPosts()
+        // Clear cache and refresh posts
+        feedStore.clearCache()
+        await fetchPosts(false, true) // Force refresh
       } catch (error) {
         console.error('Error unfollowing user:', error)
         setAlert('error', 'Failed to unfollow user. Please try again.')
@@ -603,79 +623,57 @@ export default {
       }
     }
     
-    const fetchPosts = async (loadMore = false) => {
-      if (loadMore) {
-        isLoadingMore.value = true
-      } else {
-        isLoadingActivities.value = true
-        currentOffset.value = 0
-        activities.value = []
+    const fetchPosts = async (loadMore = false, forceRefresh = false) => {
+      if (!currentUser.value?.id) {
+        console.log('User not loaded yet')
+        return
       }
       
       try {
-        const currentUserId = window.currentUser.id
-        console.log('Current user ID:', currentUserId)
-
-        console.log('Fetching posts for current user...')
-        // Use the Feed Composite Service with pagination
-        const feedData = await feedService.getUserFeed(
-          currentUserId, 
-          10, // limit
-          currentOffset.value // offset
-        )
-        const allPosts = feedData.posts
-        console.log(`Total posts fetched: ${allPosts.length}`)
-
-        if (allPosts && allPosts.length > 0) {
-          // Map posts to activities format
-          const newActivities = allPosts.map(post => ({
-            ...post,
-            user: post.username,
-            userImg: post.profilePicture || userProfile.value.avatar,
-            date: calculateTimeSince(post.createdAt),
-            location: post.waypoints && post.waypoints[0] ? post.waypoints[0].address : '',
-            routeTitle: post.title,
-            distance: post.distance && typeof post.distance === 'string' && post.distance.includes('km') 
-              ? post.distance 
-              : `${post.distance || 0} km`,
-            mapImg: post.image,
-            likes: post.likeCount,
-            shares: post.shareCount,
-            commentsList: post.commentsList || [],
-            userID: post.userId
-          }))
+        const currentUserId = currentUser.value.id
+        
+        if (!loadMore) {
+          isLoadingActivities.value = true
+          // Use store to fetch posts (with caching)
+          const result = await feedStore.fetchPosts(currentUserId, forceRefresh)
           
-          if (loadMore) {
-            activities.value = [...activities.value, ...newActivities]
+          if (result.fromCache) {
+            console.log('Loaded posts from cache')
           } else {
-            activities.value = newActivities
+            console.log('Fetched fresh posts from server')
           }
           
-          // Update pagination state
-          hasMorePosts.value = feedData.pagination?.hasMore || false
-          currentOffset.value += allPosts.length
-
+          // Transform posts for UI
+          feedStore.posts.forEach(post => {
+            // Add UI-specific transformations
+            post.user = post.username
+            post.userImg = post.profilePicture || userProfile.value.avatar
+            post.date = calculateTimeSince(post.createdAt)
+            post.location = post.waypoints && post.waypoints[0] ? post.waypoints[0].address : ''
+            post.routeTitle = post.title
+            post.distance = post.distance && typeof post.distance === 'string' && post.distance.includes('km') 
+              ? post.distance 
+              : `${post.distance || 0} km`
+            post.mapImg = post.image
+            post.likes = post.likeCount
+            post.shares = post.shareCount
+            post.commentsList = post.commentsList || []
+            post.userID = post.userId
+          })
         } else {
-          if (!loadMore) {
-            activities.value = []
-          }
-          hasMorePosts.value = false
+          // Load more posts
+          await feedStore.loadMorePosts(currentUserId)
         }
-
       } catch (error) {
         console.error('Error in fetchPosts:', error)
-        if (!loadMore) {
-          activities.value = []
-        }
       } finally {
         isLoadingActivities.value = false
-        isLoadingMore.value = false
       }
     }
     
-    const loadMorePosts = () => {
-      if (!isLoadingMore.value && hasMorePosts.value) {
-        fetchPosts(true)
+    const loadMorePosts = async () => {
+      if (!feedStore.isLoading && feedStore.hasMorePosts) {
+        await fetchPosts(true)
       }
     }
     
@@ -692,6 +690,11 @@ export default {
 
         // Increment the share count on the frontend if the request succeeds
         activity.shares = (activity.shares || 0) + 1
+        
+        // Update the store
+        feedStore.updatePostInteraction(activity.id, {
+          shareCount: activity.shares
+        })
       } catch (error) {
         console.error("Error sharing post:", error)
         // Show error alert
@@ -730,6 +733,12 @@ export default {
         // Toggle the like status
         activity.isLiked = !activity.isLiked
         activity.likes += activity.isLiked ? 1 : -1
+        
+        // Update the store
+        feedStore.updatePostInteraction(activity.id, {
+          isLiked: activity.isLiked,
+          likeCount: activity.likes
+        })
 
         // Ensure postsLiked is defined as an array
         if (!Array.isArray(currentUser.value.postsLiked)) {
@@ -762,6 +771,12 @@ export default {
         top: 0,
         behavior: 'smooth'
       })
+    }
+    
+    const refreshFeed = async () => {
+      feedStore.clearCache()
+      await fetchPosts(false, true)
+      setAlert('success', 'Feed refreshed!')
     }
     
     // Initialize on mount
@@ -860,7 +875,8 @@ export default {
       handleActivityShare,
       openActivityModal,
       scrollToTop,
-      loadMorePosts
+      loadMorePosts,
+      refreshFeed
     }
   }
 }
@@ -891,5 +907,19 @@ export default {
 
 .side-column > div:last-child {
     margin-bottom: 0 !important;
+}
+
+/* Refresh button animation */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin {
+    animation: spin 1s linear infinite;
 }
 </style>
