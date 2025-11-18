@@ -2,6 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
+
+// Import shared middleware and utilities
+const { requestId } = require('../../../shared/middleware/requestId');
+const { httpLogger, logger } = require('../../../shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+
 const interactionRoutes = require('../routes/interactionRoutes');
 
 const app = express();
@@ -9,15 +15,14 @@ const PORT = process.env.PORT || 3003;
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId);
+app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/interactions', interactionRoutes);
-
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'interaction-service',
     version: '1.0.0',
@@ -27,12 +32,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+// Routes
+app.use('/api/interactions', interactionRoutes);
+
+// 404 handler
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const server = app.listen(PORT, () => {
+  logger.info(`Interaction Service running on port ${PORT}`);
 });
 
-app.listen(PORT, () => {
-  console.log(`Interaction Service running on port ${PORT}`);
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });

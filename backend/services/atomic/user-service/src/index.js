@@ -6,6 +6,11 @@ const path = require('path');
 // Load environment variables from .env ar backend/
 dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 
+// Import shared middleware and utilities
+const { requestId } = require('../../../shared/middleware/requestId');
+const { httpLogger, logger } = require('../../../shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+
 // Import routes
 const userRoutes = require('../routes/userRoutes');
 
@@ -14,6 +19,8 @@ const app = express();
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId); // Track requests with unique IDs
+app.use(httpLogger); // Log all HTTP requests
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -31,19 +38,32 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/users', userRoutes);
-app.use('/api', userRoutes); 
+app.use('/api', userRoutes);
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(err.status || 500).json({
-    message: err.message || 'Internal server error',
-    error: process.env.NODE_ENV === 'development' ? err : {}
+// 404 handler for undefined routes
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const server = app.listen(process.env.PORT || 3001, () => {
+  logger.info(`User service running on port ${process.env.PORT || 3001}`);
+});
+
+// Handle shutdown signals
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
   });
 });
 
-// Start server
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`User service running on port ${PORT}`);
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });

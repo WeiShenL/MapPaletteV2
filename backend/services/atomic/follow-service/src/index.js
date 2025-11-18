@@ -3,21 +3,25 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 
+// Import shared middleware and utilities
+const { requestId } = require('../../../shared/middleware/requestId');
+const { httpLogger, logger } = require('../../../shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+
 const followRoutes = require('../routes/followRoutes');
 
 const app = express();
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId);
+app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/follow', followRoutes);
-
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'follow-service',
     version: '1.0.0',
@@ -27,8 +31,33 @@ app.get('/health', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3007;
+// Routes
+app.use('/api/follow', followRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Follow Service running on port ${PORT}`);
+// 404 handler
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const PORT = process.env.PORT || 3007;
+const server = app.listen(PORT, () => {
+  logger.info(`Follow Service running on port ${PORT}`);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });
