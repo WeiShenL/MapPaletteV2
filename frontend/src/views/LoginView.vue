@@ -61,8 +61,7 @@
 <script>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { auth } from '@/config/firebase'
-import { signInWithEmailAndPassword } from 'firebase/auth'
+import { useAuth } from '@/composables/useAuth'
 import ForgotPasswordModal from '@/components/auth/ForgotPasswordModal.vue'
 const mappaletteLogo = '/resources/images/index/mappalettelogo.png'
 const runVideo = '/resources/videos/run-video.mp4'
@@ -74,6 +73,7 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const { login } = useAuth()
     const email = ref('')
     const password = ref('')
     const showLoginError = ref(false)
@@ -87,20 +87,23 @@ export default {
       isLoggingIn.value = true
 
       try {
-        // Sign in with Firebase Auth (exactly like the legacy)
-        const userCredential = await signInWithEmailAndPassword(auth, email.value.trim(), password.value)
-        
+        // Sign in with Supabase Auth
+        const result = await login(email.value, password.value)
+
+        if (!result.success) {
+          throw new Error(result.error)
+        }
+
         console.log('Login successful')
         console.log('Logged in user:', {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          displayName: userCredential.user.displayName
+          uid: result.user.id,
+          email: result.user.email
         })
-        
+
         showLoginSuccess.value = true
         isLoggingIn.value = false
-        
-        // Redirect after 3 seconds (like legacy)
+
+        // Redirect after 3 seconds
         setTimeout(() => {
           window.location.href = '/homepage'
         }, 3000)
@@ -108,7 +111,7 @@ export default {
         console.error('Login error:', error)
         showLoginError.value = true
         isLoggingIn.value = false
-        
+
         // Clear password field
         password.value = ''
       }

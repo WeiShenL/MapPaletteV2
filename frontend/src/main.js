@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
-import { initAuthListener } from './services/authService'
+import { initAuthListener } from './composables/useAuth'
 
 // Bootstrap CSS from node_modules
 import 'bootstrap/dist/css/bootstrap.min.css'
