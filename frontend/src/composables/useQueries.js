@@ -1,10 +1,87 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import feedService from '@/services/feedService'
 import followService from '@/services/followService'
 import interactionService from '@/services/interactionService'
 import profileService from '@/services/profileService'
 import { handleApiError } from '@/lib/axios'
+
+// ==================== INFINITE FEED QUERIES ====================
+
+export function useInfiniteFeedQuery(userId, limit = 10) {
+  return useInfiniteQuery({
+    queryKey: ['feed', 'infinite', userId],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await feedService.getUserFeed(userId, limit, pageParam)
+      return {
+        data: response.data || response,
+        nextCursor: pageParam + limit,
+        hasMore: (response.data || response).length === limit
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.nextCursor : undefined
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+    onError: (error) => {
+      const { message } = handleApiError(error)
+      window.showToast?.(message, 'danger')
+    }
+  })
+}
+
+export function useInfiniteAllPostsQuery(userId, limit = 20) {
+  return useInfiniteQuery({
+    queryKey: ['posts', 'all', 'infinite', userId],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await feedService.getAllPosts(userId, limit, pageParam)
+      return {
+        data: response.data || response,
+        nextCursor: pageParam + limit,
+        hasMore: (response.data || response).length === limit
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.nextCursor : undefined
+    },
+    enabled: !!userId,
+    staleTime: 2 * 60 * 1000,
+    onError: (error) => {
+      const { message } = handleApiError(error)
+      window.showToast?.(message, 'danger')
+    }
+  })
+}
+
+export function useInfiniteUserPostsQuery(userId, limit = 20) {
+  return useInfiniteQuery({
+    queryKey: ['posts', 'user', 'infinite', userId],
+    queryFn: async ({ pageParam = 0 }) => {
+      const response = await feedService.getUserPosts(userId)
+      // For now, we'll simulate pagination until backend supports it
+      const allPosts = response.data || response
+      const start = pageParam
+      const end = start + limit
+      const posts = allPosts.slice(start, end)
+
+      return {
+        data: posts,
+        nextCursor: end,
+        hasMore: end < allPosts.length
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.nextCursor : undefined
+    },
+    enabled: !!userId,
+    staleTime: 5 * 60 * 1000,
+    onError: (error) => {
+      const { message } = handleApiError(error)
+      window.showToast?.(message, 'danger')
+    }
+  })
+}
 
 // ==================== FEED QUERIES ====================
 
