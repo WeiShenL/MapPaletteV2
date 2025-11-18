@@ -439,6 +439,52 @@ docker run -p 80:80 mappalette-frontend  # Run container
 
 ---
 
+## Lighthouse Performance Audit
+
+After deploying your application, run a Lighthouse audit to verify performance:
+
+### Using the Provided Script
+
+```bash
+# Install Lighthouse CLI globally (one-time)
+npm install -g lighthouse
+
+# Run audit on deployed site
+./lighthouse-audit.sh https://mappalette.com
+
+# Or run on localhost
+./lighthouse-audit.sh http://localhost:3000
+
+# Specify custom output directory
+./lighthouse-audit.sh https://mappalette.com ./my-reports
+```
+
+**What it does:**
+- Runs Lighthouse audits for both desktop and mobile
+- Tests multiple pages (home, login, signup, homepage)
+- Generates HTML and JSON reports
+- Displays score summary in terminal
+- Opens reports in browser automatically
+
+**Target Scores:**
+- Performance: 90+ (Green)
+- Accessibility: 90+ (Green)
+- Best Practices: 90+ (Green)
+- SEO: 95+ (Green)
+
+### Manual Lighthouse Audit
+
+Alternatively, use Chrome DevTools:
+
+1. Open your deployed site in Chrome
+2. Open DevTools (F12)
+3. Navigate to "Lighthouse" tab
+4. Select "Desktop" or "Mobile"
+5. Click "Analyze page load"
+6. Review scores and recommendations
+
+---
+
 ## Troubleshooting
 
 ### Common Issues

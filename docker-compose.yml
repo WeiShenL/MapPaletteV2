@@ -301,11 +301,40 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+        # Supabase
         - VITE_SUPABASE_URL=${SUPABASE_PUBLIC_URL}
         - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+        # API URLs
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+        - VITE_USER_SERVICE_URL=http://user-service:5000
+        - VITE_FEED_SERVICE_URL=http://feed-service:5000
+        - VITE_POST_SERVICE_URL=http://post-service:5000
+        - VITE_INTERACTION_SERVICE_URL=http://interaction-service:5000
+        - VITE_FOLLOW_SERVICE_URL=http://follow-service:5000
+        - VITE_PROFILE_SERVICE_URL=${VITE_PROFILE_SERVICE_URL:-http://localhost:3005}
+        - VITE_SOCIAL_INTERACTION_SERVICE_URL=${VITE_SOCIAL_INTERACTION_SERVICE_URL:-http://localhost:3006}
+        - VITE_EXPLORE_ROUTES_SERVICE_URL=${VITE_EXPLORE_ROUTES_SERVICE_URL:-http://localhost:3007}
+        - VITE_LEADERBOARD_SERVICE_URL=${VITE_LEADERBOARD_SERVICE_URL:-http://localhost:3008}
+        - VITE_USER_DISCOVERY_SERVICE_URL=${VITE_USER_DISCOVERY_SERVICE_URL:-http://localhost:3009}
+        # Google Maps
+        - VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
+        # Application
+        - VITE_APP_NAME=MapPalette
+        - VITE_APP_URL=${VITE_APP_URL:-http://localhost:3000}
+        - VITE_APP_ENV=production
+        # Features
+        - VITE_ENABLE_ANALYTICS=${VITE_ENABLE_ANALYTICS:-false}
+        - VITE_ENABLE_ERROR_REPORTING=${VITE_ENABLE_ERROR_REPORTING:-true}
+        - VITE_ENABLE_DEBUG=false
     container_name: mappalette-frontend
     restart: unless-stopped
+    depends_on:
+      - user-service
+      - feed-service
+      - post-service
+      - interaction-service
+      - follow-service
+      - supabase-kong
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     networks:

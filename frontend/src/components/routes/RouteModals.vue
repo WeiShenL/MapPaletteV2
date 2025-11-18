@@ -115,7 +115,7 @@
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Modal } from 'bootstrap';
-import { auth } from '@/config/firebase';
+import { useAuth } from '@/composables/useAuth';
 import socialInteractionService from '@/services/socialInteractionService';
 
 export default {
@@ -129,6 +129,7 @@ export default {
   emits: ['alert'],
   setup(props, { emit }) {
     const router = useRouter();
+    const { currentUser } = useAuth();
     const newCommentText = ref({});
     const disabledActions = ref({});
 
@@ -166,13 +167,12 @@ export default {
     };
 
     const likeRoute = async (route) => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      if (!currentUser.value) {
         emit('alert', { type: 'error', message: 'Please login to like routes' });
         return;
       }
 
-      const currentUserID = currentUser.uid;
+      const currentUserID = currentUser.value.id;
       const isLiked = route.isLiked;
 
       // toggle the like status on the frontend first
@@ -197,8 +197,7 @@ export default {
     };
 
     const submitComment = async (route) => {
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
+      if (!currentUser.value) {
         emit('alert', { type: 'error', message: 'Please login to comment' });
         return;
       }
@@ -206,8 +205,8 @@ export default {
       const commentText = newCommentText.value[route.postID];
       if (!commentText) return;
 
-      const currentUserID = currentUser.uid;
-      const currentUsername = currentUser.displayName || 'You';
+      const currentUserID = currentUser.value.id;
+      const currentUsername = currentUser.value.username || currentUser.value.email || 'You';
 
       // Disable the comment button while posting
       if (!disabledActions.value[route.postID]) {

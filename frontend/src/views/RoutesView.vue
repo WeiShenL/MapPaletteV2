@@ -203,7 +203,7 @@ import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import RouteCards from '@/components/routes/RouteCards.vue';
 import RouteModals from '@/components/routes/RouteModals.vue';
-import { auth } from '@/config/firebase';
+import { useAuth } from '@/composables/useAuth';
 import { routesService } from '@/services/routesService';
 
 export default {
@@ -218,6 +218,7 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const { currentUser } = useAuth();
     const isLoading = ref(true);
     const isInitialLoad = ref(true);
     const isFilterLoading = ref(false);
@@ -255,7 +256,7 @@ export default {
           isFilterLoading.value = true;
         }
         
-        const userId = auth.currentUser?.uid;
+        const userId = currentUser.value?.id;
         const sortByMap = {
           'Shortest': 'shortest',
           'Longest': 'longest',
@@ -416,14 +417,10 @@ export default {
         
         window.addEventListener('userLoaded', handleUserLoaded);
         
-        // Fallback to auth state if no user data after a timeout
+        // Fallback to check auth state if no user data after a timeout
         setTimeout(() => {
-          if (!userProfile.value) {
-            auth.onAuthStateChanged((user) => {
-              if (user) {
-                router.push('/login');
-              }
-            });
+          if (!currentUser.value) {
+            router.push('/login');
           }
         }, 3000);
       }
