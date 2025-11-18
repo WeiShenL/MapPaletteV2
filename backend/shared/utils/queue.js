@@ -8,8 +8,7 @@ const { createBullBoard } = require('@bull-board/api');
 const { BullAdapter } = require('@bull-board/api/bullAdapter');
 const { ExpressAdapter } = require('@bull-board/express');
 const { db } = require('./db');
-const { renderMapFromPost } = require('./mapRenderer');
-const { optimizeRouteImage } = require('./imageOptimizer');
+const { renderMapFromPost } = require('./googleMapsRenderer');
 const { uploadRouteImage, uploadOptimizedRouteImage } = require('./storageService');
 
 // Redis connection for Bull
@@ -144,15 +143,12 @@ queues.imageProcessing.process('render-map-image', async (job) => {
       return { skipped: true, postId, reason: 'Image already exists' };
     }
 
-    // Render map to PNG buffer
-    const mapImageBuffer = await renderMapFromPost(post);
+    // Render map using Google Maps Static API (returns 3 sizes: thumbnail, medium, large)
+    const mapImages = await renderMapFromPost(post);
 
-    // Optimize image and create multiple sizes
-    const optimizedImages = await optimizeRouteImage(mapImageBuffer);
-
-    // Upload original to storage
+    // Upload all sizes to storage
     const uploadResult = await uploadRouteImage(
-      optimizedImages.large,
+      mapImages.large,
       userId,
       postId,
       {
@@ -163,10 +159,10 @@ queues.imageProcessing.process('render-map-image', async (job) => {
       }
     );
 
-    // Upload optimized versions
+    // Upload optimized versions (thumbnail and medium)
     await Promise.all([
-      uploadOptimizedRouteImage(optimizedImages.thumbnail, userId, postId, 'thumbnail'),
-      uploadOptimizedRouteImage(optimizedImages.medium, userId, postId, 'medium'),
+      uploadOptimizedRouteImage(mapImages.thumbnail, userId, postId, 'thumbnail'),
+      uploadOptimizedRouteImage(mapImages.medium, userId, postId, 'medium'),
     ]);
 
     // Update post with image URL
