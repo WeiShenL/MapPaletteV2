@@ -326,24 +326,94 @@ df -h
 
 ### Database Backup
 
-```bash
-# Manual backup
-docker compose exec supabase-db pg_dump -U postgres postgres > backup.sql
+**NEW: Automated Backup Scripts Available!**
 
-# Restore
-docker compose exec -T supabase-db psql -U postgres postgres < backup.sql
+Three powerful scripts are now available in `scripts/`:
+
+**1. Create Backup**
+```bash
+./scripts/backup.sh
+
+# Options
+./scripts/backup.sh --retention-days 14  # Keep backups for 14 days
 ```
 
-**Automatic Backups**: Daily cron job created by `deploy.sh`
-- Location: `/opt/mappalette/backups/`
-- Retention: 7 days
-- Run time: Daily at midnight
+Features:
+- Automatic compression (gzip)
+- Retention policy (default: 7 days)
+- Backup metadata tracking
+- Works with local pg_dump or Docker
+
+**2. Restore from Backup**
+```bash
+# List available backups
+ls -lh backups/
+
+# Restore specific backup
+./scripts/restore.sh backups/mappalette-backup-20241118-120000.sql.gz
+
+# Skip confirmation (dangerous!)
+./scripts/restore.sh backups/backup.sql.gz --force
+```
+
+Features:
+- Safety confirmations
+- Pre-restore backup option
+- Automatic schema migration after restore
+- Data integrity checks
+
+**3. Health Monitoring**
+```bash
+# Check all services
+./scripts/health-check.sh
+
+# Detailed view with system resources
+./scripts/health-check.sh --detailed
+
+# With alerting (configure ALERT_WEBHOOK first)
+./scripts/health-check.sh --alert
+```
+
+**Automatic Backups**: Setup with cron
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 2 AM
+0 2 * * * cd /home/mappalette/apps/MapPaletteV2 && ./scripts/backup.sh >> /home/mappalette/logs/backup.log 2>&1
+```
 
 ### Update Application
 
+**NEW: Automated Deployment Script!**
+
+```bash
+# Automated deployment with all safety checks
+./scripts/deploy.sh
+
+# Options
+./scripts/deploy.sh --skip-backup    # Skip database backup
+./scripts/deploy.sh --skip-tests     # Skip running tests
+./scripts/deploy.sh --force          # Skip all confirmations
+```
+
+The deployment script automatically:
+- ✅ Verifies Docker is running
+- ✅ Checks for uncommitted changes
+- ✅ Creates database backup
+- ✅ Pulls latest code from git
+- ✅ Installs/updates dependencies
+- ✅ Runs database migrations
+- ✅ Builds Docker images
+- ✅ Deploys with zero-downtime
+- ✅ Health checks all services
+- ✅ Auto-rollback on failure
+- ✅ Generates deployment report
+
+**Manual Update** (if you prefer):
 ```bash
 # Pull latest code
-git pull origin main
+git pull origin claude/migrate-from-firebase-vue-01299duKA7aNwtvxiJdoeiRP
 
 # Rebuild and restart
 docker compose down
@@ -358,39 +428,84 @@ docker compose exec user-service sh -c "cd /app/shared && npx prisma migrate dep
 
 ## 🔄 Migration from Firebase
 
-### 1. Export Firebase Data
+**NEW: Complete Migration Toolkit Available!**
+
+A comprehensive 3-step migration toolkit is now available in `backend/scripts/migrate/`. This includes:
+- Batch processing (100 records at a time)
+- Error handling and recovery
+- Progress tracking
+- Data validation
+- Dry run mode
+
+### 1. Setup Migration Environment
 
 ```bash
-# Download Firebase service account key from:
-# Firebase Console → Project Settings → Service Accounts → Generate New Private Key
+cd backend/scripts/migrate
 
-# Save as: firebase-service-account.json
+# Install dependencies
+npm install
+
+# Copy environment template
+cp .env.example .env
+nano .env
 ```
 
-### 2. Run Migration
+### 2. Configure Firebase Credentials
 
-```bash
-./migrate-from-firebase.sh
+Extract credentials from your Firebase service account JSON:
+
+```env
+# Firebase Service Account
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+
+# PostgreSQL Database
+DATABASE_URL=postgresql://postgres:your-password@localhost:5432/postgres
+
+# Migration Options
+BATCH_SIZE=100
+DRY_RUN=false
 ```
 
-This will:
-- Install Firebase Admin SDK
-- Generate migration script
-- Prompt you to run migration
+### 3. Run Migration (3 Steps)
 
-### 3. Execute Migration
-
+**Step 1: Export from Firebase**
 ```bash
-# Make sure database is running
-docker compose up -d supabase-db
-
-# Run migration
-node migrate.js
+npm run export
+# ✅ Exports all Firestore collections to data/*.json
 ```
 
-### 4. Verify Data
+**Step 2: Transform Data**
+```bash
+npm run transform
+# ✅ Transforms Firebase data to match PostgreSQL schema
+# ✅ Creates data/*-transformed.json files
+```
+
+**Step 3: Import to PostgreSQL**
+```bash
+# Test first (dry run)
+DRY_RUN=true npm run import
+
+# Import for real
+npm run import
+# ✅ Imports all data with batch processing
+# ✅ Respects foreign key constraints
+# ✅ Handles errors gracefully
+```
+
+**OR: Run All Steps at Once**
+```bash
+npm run migrate
+```
+
+### 4. Verify Migration
 
 ```bash
+# Check import summary
+cat data/_import_summary.json
+
 # Access database
 docker compose exec supabase-db psql -U postgres postgres
 
@@ -401,8 +516,27 @@ SELECT 'posts', COUNT(*) FROM posts
 UNION ALL
 SELECT 'follows', COUNT(*) FROM follows
 UNION ALL
-SELECT 'likes', COUNT(*) FROM likes;
+SELECT 'likes', COUNT(*) FROM likes
+UNION ALL
+SELECT 'comments', COUNT(*) FROM comments
+UNION ALL
+SELECT 'shares', COUNT(*) FROM shares;
+
+\q
 ```
+
+### 5. Cleanup
+
+```bash
+# Delete sensitive migration data
+rm -rf data/
+```
+
+**📖 Full Migration Documentation**: See `backend/scripts/migrate/README.md` for:
+- Detailed troubleshooting
+- Rollback procedures
+- Data validation steps
+- Error recovery
 
 ---
 
