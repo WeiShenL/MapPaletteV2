@@ -7,8 +7,18 @@ require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 const { requestId } = require('../../../shared/middleware/requestId');
 const { httpLogger, logger } = require('../../../shared/utils/logger');
 const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('../../../shared/utils/swagger');
 
 const interactionRoutes = require('../routes/interactionRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Interaction Service',
+  version: '1.0.0',
+  description: 'Interaction API - handles likes, comments, and shares on posts and routes',
+  port: process.env.PORT || 3003,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const PORT = process.env.PORT || 3003;
@@ -19,6 +29,9 @@ app.use(requestId);
 app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
+
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

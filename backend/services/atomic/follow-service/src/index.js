@@ -7,8 +7,18 @@ require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 const { requestId } = require('../../../shared/middleware/requestId');
 const { httpLogger, logger } = require('../../../shared/utils/logger');
 const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('../../../shared/utils/swagger');
 
 const followRoutes = require('../routes/followRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Follow Service',
+  version: '1.0.0',
+  description: 'Follow API - handles user follow relationships and social connections',
+  port: process.env.PORT || 3007,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const startTime = Date.now();
@@ -18,6 +28,9 @@ app.use(requestId);
 app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
+
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check
 app.get('/health', (req, res) => {

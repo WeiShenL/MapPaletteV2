@@ -9,8 +9,18 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 const { requestId } = require('../../../shared/middleware/requestId');
 const { httpLogger, logger } = require('../../../shared/utils/logger');
 const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('../../../shared/utils/swagger');
 
 const feedRoutes = require('../routes/feedRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Feed Service',
+  version: '1.0.0',
+  description: 'Feed API - aggregates posts from followed users for personalized feed',
+  port: process.env.PORT || 3004,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const PORT = process.env.PORT || 3004;
@@ -21,6 +31,9 @@ app.use(requestId);
 app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
+
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

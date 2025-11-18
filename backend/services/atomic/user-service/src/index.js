@@ -10,9 +10,19 @@ dotenv.config({ path: path.join(__dirname, '../../../../.env') });
 const { requestId } = require('../../../shared/middleware/requestId');
 const { httpLogger, logger } = require('../../../shared/utils/logger');
 const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('../../../shared/utils/swagger');
 
 // Import routes
 const userRoutes = require('../routes/userRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'User Service',
+  version: '1.0.0',
+  description: 'User management API - handles user profiles, authentication, and user data',
+  port: process.env.PORT || 3001,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 // Create Express app
 const app = express();
@@ -24,9 +34,12 @@ app.use(httpLogger); // Log all HTTP requests
 app.use(cors({ origin: true }));
 app.use(express.json());
 
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
+
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'user-service',
     version: '1.0.0',
