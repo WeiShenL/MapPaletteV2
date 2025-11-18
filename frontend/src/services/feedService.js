@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from '@/lib/axios';
 
 const FEED_SERVICE_URL = import.meta.env.VITE_FEED_SERVICE_URL || 'http://localhost:3004';
 const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001';
