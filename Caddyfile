@@ -1,87 +1,323 @@
 # Caddyfile for MapPaletteV2
 # Auto HTTPS with Let's Encrypt
+# Version: 2.0
 
 {
-  email admin@{$DOMAIN}
+  email admin@{$DOMAIN:example.com}
+  # Enable admin API for monitoring
+  admin :2019
+}
+
+# Global options for rate limiting
+(common) {
+  # Compression
+  encode gzip zstd
+
+  # Security headers
+  header {
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    X-XSS-Protection "1; mode=block"
+    Referrer-Policy "strict-origin-when-cross-origin"
+    # Remove server header for security
+    -Server
+  }
+
+  # CORS headers for API
+  @cors_preflight method OPTIONS
+  handle @cors_preflight {
+    header {
+      Access-Control-Allow-Origin "{$CORS_ORIGIN:*}"
+      Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+      Access-Control-Allow-Headers "Content-Type, Authorization, X-Service-Key"
+      Access-Control-Max-Age "3600"
+    }
+    respond 204
+  }
+
+  # Add CORS to all responses
+  header {
+    Access-Control-Allow-Origin "{$CORS_ORIGIN:*}"
+    Access-Control-Allow-Credentials "true"
+  }
+
+  # Health check endpoint (doesn't require auth)
+  handle /health {
+    respond "OK" 200
+  }
 }
 
 # Development - HTTP only
 :80 {
-  # Frontend
-  handle /* {
-    reverse_proxy frontend:80
+  import common
+
+  # API Routes - Microservices
+  # User Service (port 5000)
+  handle /api/users/* {
+    reverse_proxy user-service:5000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
   }
 
-  # API Gateway
-  handle /api/* {
-    reverse_proxy feed-service:5000
+  # Post Service (port 5001)
+  handle /api/posts/* {
+    reverse_proxy post-service:5001 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+
+  # Interaction Service (port 5002)
+  handle /api/interactions/* {
+    reverse_proxy interaction-service:5002 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+
+  # Follow Service (port 5003)
+  handle /api/follows/* {
+    reverse_proxy follow-service:5003 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+
+  # Feed Service (port 5004)
+  handle /api/feed/* {
+    reverse_proxy feed-service:5004 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+    }
+  }
+
+  # Supabase Kong Gateway (Auth and REST)
+  handle /auth/* {
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  handle /rest/* {
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  handle /storage/* {
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # Frontend (SPA) - must be last
+  handle /* {
+    reverse_proxy frontend:80 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
+  }
+
+  # Error handling
+  handle_errors {
+    @5xx expression `{err.status_code} >= 500 && {err.status_code} < 600`
+    handle @5xx {
+      respond "Service temporarily unavailable" 503
+    }
+
+    @4xx expression `{err.status_code} >= 400 && {err.status_code} < 500`
+    handle @4xx {
+      respond "Bad request" {err.status_code}
+    }
+  }
+
+  # Logging
+  log {
+    output file /var/log/caddy/access.log {
+      roll_size 100mb
+      roll_keep 5
+      roll_keep_for 720h
+    }
+    format json
+    level INFO
+  }
+}
+
+# Production - with domain and HTTPS
+{$DOMAIN:localhost} {
+  import common
+
+  # Additional production security headers
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' {$DOMAIN}"
+    Permissions-Policy "geolocation=(), microphone=(), camera=()"
+  }
+
+  # API Routes - same as development but with HTTPS
+  # User Service
+  handle /api/users/* {
+    reverse_proxy user-service:5000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
+  # Post Service
+  handle /api/posts/* {
+    reverse_proxy post-service:5001 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
+  # Interaction Service
+  handle /api/interactions/* {
+    reverse_proxy interaction-service:5002 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
+  # Follow Service
+  handle /api/follows/* {
+    reverse_proxy follow-service:5003 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
+  # Feed Service
+  handle /api/feed/* {
+    reverse_proxy feed-service:5004 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
   }
 
   # Supabase Kong Gateway
   handle /auth/* {
-    reverse_proxy supabase-kong:8000
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
   }
 
   handle /rest/* {
-    reverse_proxy supabase-kong:8000
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
   }
 
-  # Compression
-  encode gzip zstd
-
-  # Security headers
-  header {
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "SAMEORIGIN"
-    X-XSS-Protection "1; mode=block"
-    Referrer-Policy "strict-origin-when-cross-origin"
+  handle /storage/* {
+    reverse_proxy supabase-kong:8000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
   }
 
-  # CORS
-  @options method OPTIONS
-  handle @options {
-    header Access-Control-Allow-Origin "*"
-    header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-    header Access-Control-Allow-Headers "Content-Type, Authorization"
-    respond 204
-  }
-}
-
-# Production - with domain
-{$DOMAIN:localhost} {
-  # Frontend
+  # Frontend (SPA)
   handle /* {
-    reverse_proxy frontend:80
+    reverse_proxy frontend:80 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+    }
   }
 
-  # API Gateway
-  handle /api/* {
-    reverse_proxy feed-service:5000
+  # Error handling
+  handle_errors {
+    @5xx expression `{err.status_code} >= 500 && {err.status_code} < 600`
+    handle @5xx {
+      respond "Service temporarily unavailable" 503
+    }
+
+    @4xx expression `{err.status_code} >= 400 && {err.status_code} < 500`
+    handle @4xx {
+      respond "Bad request" {err.status_code}
+    }
   }
 
-  # Supabase
-  handle /auth/* {
-    reverse_proxy supabase-kong:8000
-  }
-
-  handle /rest/* {
-    reverse_proxy supabase-kong:8000
-  }
-
-  # Compression
-  encode gzip zstd
-
-  # Security headers
-  header {
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "SAMEORIGIN"
-    X-XSS-Protection "1; mode=block"
-    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-    Referrer-Policy "strict-origin-when-cross-origin"
-  }
-
-  # Logs
+  # Production logging with more detail
   log {
-    output file /var/log/caddy/access.log
+    output file /var/log/caddy/access.log {
+      roll_size 100mb
+      roll_keep 10
+      roll_keep_for 720h
+    }
+    format json
+    level INFO
+  }
+
+  # Separate error log
+  log {
+    output file /var/log/caddy/error.log {
+      roll_size 50mb
+      roll_keep 5
+      roll_keep_for 720h
+    }
+    level ERROR
   }
 }

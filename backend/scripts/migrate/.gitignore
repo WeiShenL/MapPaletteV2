@@ -1,0 +1,15 @@
+# Environment variables
+.env
+
+# Migration data (contains sensitive user data)
+data/
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Lock files
+package-lock.json
