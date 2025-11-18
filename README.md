@@ -1,33 +1,42 @@
-# MapPaletteV2 - Running Social Media Platform
+# MapPaletteV2
 
-**A professional, scalable social media platform for runners** built with Vue 3, Node.js microservices, Supabase PostgreSQL, and Redis caching.
+**A professional, scalable social media platform for runners** built with modern web technologies and microservices architecture.
 
-## ✨ Features
+## Features
 
-- 🏃 Create and share running routes
-- 🗺️ Interactive map route creation
-- 👥 Follow other runners
+- 🏃 Create and share running routes with interactive map creation
+- 🗺️ Google Maps integration with static map images
+- 👥 Follow system and social feed
 - ❤️ Like, comment, and share posts
 - 🏆 Points-based leaderboard system
-- 🔒 Privacy controls
+- 🔐 Secure authentication with Supabase Auth
+- ⚡ Fast with Redis caching
 - 📱 Responsive design
-- ⚡ Fast with caching
-- 🔐 Secure authentication
 
-## 🚀 Quick Start (5 Minutes)
+## Technology Stack
+
+**Frontend:** Vue 3, Vite, Bootstrap 5
+**Backend:** Node.js microservices, Express, Prisma ORM
+**Database:** PostgreSQL 15 (Supabase)
+**Cache:** Redis 7
+**Infrastructure:** Docker, Supabase Platform
+**Maps:** Google Maps API
+
+## Quick Start
 
 ### Prerequisites
 
 - Docker & Docker Compose
+- Node.js 18+ (for local development)
 - 10GB free disk space
-- Ports 3000, 5432, 6379, 8000 available
 
-### 1. Clone and Setup
+### Setup (5 Minutes)
 
 ```bash
+# Clone repository
 cd MapPaletteV2
 
-# Copy environment file (uses sensible defaults)
+# Copy environment file
 cp .env.example .env
 
 # Run automated setup
@@ -35,101 +44,94 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-### 2. Access Application
+### Access Application
 
 - **Frontend**: http://localhost:3000
-- **API**: http://localhost:8080
 - **Supabase Studio**: http://localhost:8000
+- **API Gateway**: http://localhost:8080
 - **Database**: localhost:5432
 - **Redis**: localhost:6379
 
-### 3. Create Your First User
+### First Steps
 
-Open http://localhost:8000 in your browser to access Supabase Studio.
+1. Open http://localhost:8000 (Supabase Studio)
+2. Create a user account via Auth panel
+3. Access frontend at http://localhost:3000
+4. Start creating routes!
 
-### 4. Start Using
+## Architecture Overview
 
-1. Login with your credentials
-2. Create your profile
-3. Start creating routes!
+### Microservices
 
----
+**Atomic Services:**
+- `user-service` - User management
+- `post-service` - Route posts with map generation
+- `interaction-service` - Likes, comments, shares
+- `follow-service` - Follow/unfollow system
 
-## 📖 Full Documentation
+**Composite Services:**
+- `feed-service` - Personalized feed aggregation
+- `profile-service` - User profile with stats
+- `social-interaction-service` - Social features orchestration
+- `explore-routes-service` - Route discovery
+- `leaderboard-service` - Rankings (Go)
+- `user-discovery-service` - User recommendations (Java)
 
-- **[Quick Start Guide](./QUICKSTART.md)** - Get running in 5 minutes
-- **[Deployment Guide](./DEPLOYMENT.md)** - Complete deployment instructions
-- **[Migration Guide](./migrate-from-firebase.sh)** - Migrating from Firebase
+**Infrastructure:**
+- PostgreSQL 15 via Supabase
+- Redis 7 for caching
+- Supabase Auth for authentication
+- Kong API Gateway
 
----
+## Development
 
-## 🏗️ Architecture
+See **[development.md](./development.md)** for comprehensive documentation including:
 
-### Technology Stack
+- Detailed architecture and tech stack
+- API endpoints and schemas
+- Reusable components
+- Database schema
+- Google Maps implementation
+- External services reference
+- Deployment guide
+- Migration notes
 
-**Frontend**: Vue 3, Vite, Bootstrap 5
-**Backend**: Node.js Microservices, Express, Prisma ORM, Supabase Auth
-**Database**: PostgreSQL 15 (Supabase), Redis 7 (Caching)
-**Infrastructure**: Docker, Caddy, Nginx
+## Security Features
 
-### Services
+- JWT authentication via Supabase
+- Input validation with Zod schemas
+- Multi-tier rate limiting
+- CORS protection
+- SQL injection prevention (Prisma ORM)
+- XSS protection
+- Ownership verification middleware
 
-- **Atomic Services**: user, post, interaction, follow
-- **Composite Services**: feed, profile, explore
-- **Infrastructure**: PostgreSQL, Redis, Supabase Auth, Caddy
+## Performance
 
----
+- Feed load: <500ms (cached)
+- API response: <100ms (p90)
+- Database queries: <50ms (indexed)
+- Cache hit rate: ~80%
 
-## 🔐 Security Features
-
-- ✅ JWT authentication (Supabase)
-- ✅ Input validation (Zod schemas)
-- ✅ Rate limiting
-- ✅ CORS protection
-- ✅ SQL injection prevention (Prisma)
-- ✅ XSS protection
-- ✅ Ownership verification
-- ✅ **CRITICAL FIXES**: Secured points/counts endpoints
-
----
-
-## ⚡ Performance
-
-- **Feed Load**: <500ms (cached)
-- **API Response**: <100ms (p90)
-- **Database Queries**: <50ms (indexed)
-- **Cache Hit Rate**: ~80%
-
----
-
-## 💰 Deployment Cost
+## Deployment Cost
 
 - **Development**: Free (local Docker)
-- **Production**: $5-7/month (Hetzner VPS, up to 2k daily active users)
+- **Production**: ~$7/month (VPS + Google Maps API)
 
----
+## What's New in V2
 
-## 🛠️ Development
+- Migrated from Firebase to Supabase PostgreSQL
+- Added Redis caching (10x faster)
+- Switched to Google Maps Static API
+- Fixed critical security vulnerabilities
+- Added cursor-based pagination
+- Optimized database queries (eliminated N+1)
+- Containerized all services
+- Added comprehensive rate limiting
 
-```bash
-# Start services
-docker compose up -d
+## Production Deployment
 
-# View logs
-docker compose logs -f
-
-# Access database
-docker compose exec supabase-db psql -U postgres postgres
-
-# Run migrations
-cd backend/shared && npx prisma migrate dev
-```
-
----
-
-## 🚢 Production Deployment
-
-See **[DEPLOYMENT.md](./DEPLOYMENT.md)** for complete guide.
+See [development.md#deployment](./development.md#deployment) for complete guide.
 
 Quick deploy to VPS:
 
@@ -137,50 +139,41 @@ Quick deploy to VPS:
 ./deploy.sh
 ```
 
----
-
-## 🔄 Backup
+## Commands
 
 ```bash
+# Start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f [service-name]
+
+# Access database
+docker compose exec supabase-db psql -U postgres postgres
+
+# Run migrations
+cd backend/shared && npx prisma migrate dev
+
+# Generate Prisma client
+cd backend/shared && npx prisma generate
+
 # Backup database
 docker compose exec supabase-db pg_dump -U postgres postgres > backup.sql
 
-# Restore
+# Restore database
 docker compose exec -T supabase-db psql -U postgres postgres < backup.sql
 ```
 
-Automated daily backups are configured by `deploy.sh`.
+## Documentation
 
----
+- **[development.md](./development.md)** - Complete development guide
+- **[.env.example](./.env.example)** - Environment configuration reference
+- **[backend/shared/prisma/schema.prisma](./backend/shared/prisma/schema.prisma)** - Database schema
 
-## 📝 What's New in V2
-
-- ✅ Migrated from Firebase to Supabase PostgreSQL
-- ✅ Added Redis caching (10x faster)
-- ✅ Fixed critical security vulnerabilities
-- ✅ Added pagination to all endpoints
-- ✅ Optimized database queries (no more N+1)
-- ✅ Containerized all services
-- ✅ Auto-deployment scripts
-
----
-
-## 📧 Support
-
-- **Documentation**: [DEPLOYMENT.md](./DEPLOYMENT.md)
-- **Quick Start**: [QUICKSTART.md](./QUICKSTART.md)
-- **Logs**: `docker compose logs -f`
-
----
-
-## 📄 License
+## License
 
 MIT License
 
 ---
 
-**Ready to run?** → [Quick Start](./QUICKSTART.md)
-
-**Ready to deploy?** → [Deployment Guide](./DEPLOYMENT.md)
-
-🚀 Happy running!
+**For detailed development information**, see [development.md](./development.md)
