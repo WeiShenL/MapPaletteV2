@@ -1,0 +1,39 @@
+<h1 class="email-title">You Have a New Follower! 👥</h1>
+
+<p class="email-text">
+  Hi {{username}},
+</p>
+
+<p class="email-text">
+  Great news! <strong>{{followerUsername}}</strong> just started following you on MapPalette.
+</p>
+
+<div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+  <div style="display: flex; align-items: center;">
+    <img src="{{followerProfilePicture}}" alt="{{followerUsername}}" style="width: 60px; height: 60px; border-radius: 50%; margin-right: 15px;">
+    <div>
+      <strong style="font-size: 18px;">{{followerUsername}}</strong><br>
+      <span style="color: #777777; font-size: 14px;">{{followerBio}}</span>
+    </div>
+  </div>
+</div>
+
+<div style="text-align: center;">
+  <a href="{{appUrl}}/profile/{{followerUsername}}" class="email-button">View Profile</a>
+</div>
+
+<p class="email-text">
+  Check out their routes and consider following them back to stay updated with their adventures!
+</p>
+
+<p class="email-text">
+  Happy exploring!<br>
+  <strong>The MapPalette Team</strong>
+</p>
+
+<div class="email-divider"></div>
+
+<p class="email-text" style="font-size: 13px; color: #999999;">
+  You're receiving this email because you have notifications enabled for new followers.
+  <a href="{{appUrl}}/settings/notifications" style="color: #667eea;">Manage notification preferences</a>
+</p>
