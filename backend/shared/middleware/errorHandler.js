@@ -53,7 +53,7 @@ class RateLimitError extends AppError {
 /**
  * Global error handler middleware
  */
-const errorHandler = (err, req, res, next) => {
+const errorHandler = (err, req, res, _next) => {
   // Default error values
   let statusCode = err.statusCode || 500;
   let code = err.code || 'INTERNAL_ERROR';
