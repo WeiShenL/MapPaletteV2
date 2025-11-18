@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.82.0",
+    "axios": "^1.13.2",
     "puppeteer": "^24.30.0"
   }
 }

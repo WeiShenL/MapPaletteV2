@@ -1,7 +1,6 @@
 const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
-const { renderMapFromPost } = require('/app/shared/utils/mapRenderer');
-const { optimizeRouteImage } = require('/app/shared/utils/imageOptimizer');
+const { renderMapFromPost, calculateWaypointsHash } = require('/app/shared/utils/googleMapsRenderer');
 const { uploadRouteImage, uploadOptimizedRouteImage } = require('/app/shared/utils/storageService');
 
 // Create a new post
@@ -57,39 +56,60 @@ const createPost = async (req, res) => {
       try {
         console.log(`[CREATE_POST] Generating map image for post ${post.id}`);
 
-        // Render map to PNG buffer
-        const mapImageBuffer = await renderMapFromPost(post);
+        // Calculate hash for caching
+        const parsedWaypoints = JSON.parse(waypoints);
+        const waypointsHash = calculateWaypointsHash(parsedWaypoints, post.color);
+        const cacheKey = `map:${waypointsHash}`;
 
-        // Optimize image and create multiple sizes
-        const optimizedImages = await optimizeRouteImage(mapImageBuffer);
+        // Check cache first to avoid duplicate Google Maps API calls
+        let cachedImageUrl = await cache.get(cacheKey);
 
-        // Upload original to storage
-        const uploadResult = await uploadRouteImage(
-          optimizedImages.large,
-          userID,
-          post.id,
-          {
-            waypointCount: JSON.parse(waypoints).length,
-            color: post.color,
-            region: post.region,
-          }
-        );
+        if (cachedImageUrl) {
+          console.log(`[CREATE_POST] Using cached map image for hash ${waypointsHash}`);
 
-        // Upload optimized versions
-        await Promise.all([
-          uploadOptimizedRouteImage(optimizedImages.thumbnail, userID, post.id, 'thumbnail'),
-          uploadOptimizedRouteImage(optimizedImages.medium, userID, post.id, 'medium'),
-        ]);
+          // Update post with cached URL
+          await db.post.update({
+            where: { id: post.id },
+            data: { imageUrl: cachedImageUrl },
+          });
 
-        // Update post with image URL
-        await db.post.update({
-          where: { id: post.id },
-          data: { imageUrl: uploadResult.publicUrl },
-        });
+          post.imageUrl = cachedImageUrl;
+        } else {
+          // Render map using Google Maps Static API (returns 3 sizes: thumbnail, medium, large)
+          const mapImages = await renderMapFromPost(post);
 
-        post.imageUrl = uploadResult.publicUrl;
+          // Upload all sizes to storage
+          const uploadResult = await uploadRouteImage(
+            mapImages.large,
+            userID,
+            post.id,
+            {
+              waypointCount: parsedWaypoints.length,
+              color: post.color,
+              region: post.region,
+              hash: waypointsHash,
+            }
+          );
 
-        console.log(`[CREATE_POST] Map image generated and uploaded: ${uploadResult.publicUrl}`);
+          // Upload optimized versions (thumbnail and medium)
+          await Promise.all([
+            uploadOptimizedRouteImage(mapImages.thumbnail, userID, post.id, 'thumbnail'),
+            uploadOptimizedRouteImage(mapImages.medium, userID, post.id, 'medium'),
+          ]);
+
+          // Update post with image URL
+          await db.post.update({
+            where: { id: post.id },
+            data: { imageUrl: uploadResult.publicUrl },
+          });
+
+          post.imageUrl = uploadResult.publicUrl;
+
+          // Cache the URL for 30 days (routes don't change)
+          await cache.set(cacheKey, uploadResult.publicUrl, 30 * 24 * 60 * 60);
+
+          console.log(`[CREATE_POST] Map image generated and uploaded: ${uploadResult.publicUrl}`);
+        }
       } catch (imageError) {
         // Log error but don't fail the post creation
         console.error(`[CREATE_POST] Failed to generate map image:`, imageError);
