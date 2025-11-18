@@ -7,6 +7,10 @@ const Bull = require('bull');
 const { createBullBoard } = require('@bull-board/api');
 const { BullAdapter } = require('@bull-board/api/bullAdapter');
 const { ExpressAdapter } = require('@bull-board/express');
+const { db } = require('./db');
+const { renderMapFromPost } = require('./mapRenderer');
+const { optimizeRouteImage } = require('./imageOptimizer');
+const { uploadRouteImage, uploadOptimizedRouteImage } = require('./storageService');
 
 // Redis connection for Bull
 const redisConfig = {
@@ -116,6 +120,80 @@ queues.imageProcessing.process('optimize-profile-picture', async (job) => {
   // - Upload to storage
   await new Promise((resolve) => setTimeout(resolve, 2000));
   return { optimized: true, userId };
+});
+
+queues.imageProcessing.process('render-map-image', async (job) => {
+  const { postId, userId } = job.data;
+
+  if (global.logger) {
+    global.logger.info(`Rendering map image for post ${postId}`);
+  }
+
+  try {
+    // Fetch post from database
+    const post = await db.post.findUnique({
+      where: { id: postId },
+    });
+
+    if (!post) {
+      throw new Error(`Post ${postId} not found`);
+    }
+
+    // Skip if already has image
+    if (post.imageUrl) {
+      return { skipped: true, postId, reason: 'Image already exists' };
+    }
+
+    // Render map to PNG buffer
+    const mapImageBuffer = await renderMapFromPost(post);
+
+    // Optimize image and create multiple sizes
+    const optimizedImages = await optimizeRouteImage(mapImageBuffer);
+
+    // Upload original to storage
+    const uploadResult = await uploadRouteImage(
+      optimizedImages.large,
+      userId,
+      postId,
+      {
+        waypointCount: JSON.parse(post.waypoints).length,
+        color: post.color,
+        region: post.region,
+        renderedAsync: true,
+      }
+    );
+
+    // Upload optimized versions
+    await Promise.all([
+      uploadOptimizedRouteImage(optimizedImages.thumbnail, userId, postId, 'thumbnail'),
+      uploadOptimizedRouteImage(optimizedImages.medium, userId, postId, 'medium'),
+    ]);
+
+    // Update post with image URL
+    await db.post.update({
+      where: { id: postId },
+      data: { imageUrl: uploadResult.publicUrl },
+    });
+
+    if (global.logger) {
+      global.logger.info(`Map image rendered and uploaded for post ${postId}`, {
+        publicUrl: uploadResult.publicUrl,
+      });
+    }
+
+    return {
+      success: true,
+      postId,
+      imageUrl: uploadResult.publicUrl,
+    };
+  } catch (error) {
+    if (global.logger) {
+      global.logger.error(`Failed to render map image for post ${postId}`, {
+        error: error.message,
+      });
+    }
+    throw error;
+  }
 });
 
 queues.imageProcessing.process('optimize-route-image', async (job) => {
@@ -286,6 +364,15 @@ const addJob = {
   // Image processing jobs
   optimizeProfilePicture: (userId, imageUrl) =>
     queues.imageProcessing.add('optimize-profile-picture', { userId, imageUrl }),
+
+  renderMapImage: (postId, userId) =>
+    queues.imageProcessing.add('render-map-image', { postId, userId }, {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 5000, // Start with 5 seconds
+      },
+    }),
 
   optimizeRouteImage: (postId, imageUrl) =>
     queues.imageProcessing.add('optimize-route-image', { postId, imageUrl }),

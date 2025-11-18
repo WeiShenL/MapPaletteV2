@@ -1,5 +1,8 @@
 const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
+const { renderMapFromPost } = require('/app/shared/utils/mapRenderer');
+const { optimizeRouteImage } = require('/app/shared/utils/imageOptimizer');
+const { uploadRouteImage, uploadOptimizedRouteImage } = require('/app/shared/utils/storageService');
 
 // Create a new post
 const createPost = async (req, res) => {
@@ -23,6 +26,7 @@ const createPost = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // Create post first (without image URL)
     const post = await db.post.create({
       data: {
         userId: userID,
@@ -47,6 +51,57 @@ const createPost = async (req, res) => {
         }
       }
     });
+
+    // Generate map image if waypoints are provided and no imageUrl
+    if (waypoints && !imageUrl) {
+      try {
+        console.log(`[CREATE_POST] Generating map image for post ${post.id}`);
+
+        // Render map to PNG buffer
+        const mapImageBuffer = await renderMapFromPost(post);
+
+        // Optimize image and create multiple sizes
+        const optimizedImages = await optimizeRouteImage(mapImageBuffer);
+
+        // Upload original to storage
+        const uploadResult = await uploadRouteImage(
+          optimizedImages.large,
+          userID,
+          post.id,
+          {
+            waypointCount: JSON.parse(waypoints).length,
+            color: post.color,
+            region: post.region,
+          }
+        );
+
+        // Upload optimized versions
+        await Promise.all([
+          uploadOptimizedRouteImage(optimizedImages.thumbnail, userID, post.id, 'thumbnail'),
+          uploadOptimizedRouteImage(optimizedImages.medium, userID, post.id, 'medium'),
+        ]);
+
+        // Update post with image URL
+        await db.post.update({
+          where: { id: post.id },
+          data: { imageUrl: uploadResult.publicUrl },
+        });
+
+        post.imageUrl = uploadResult.publicUrl;
+
+        console.log(`[CREATE_POST] Map image generated and uploaded: ${uploadResult.publicUrl}`);
+      } catch (imageError) {
+        // Log error but don't fail the post creation
+        console.error(`[CREATE_POST] Failed to generate map image:`, imageError);
+        if (global.logger) {
+          global.logger.error('Map image generation failed', {
+            postId: post.id,
+            userId: userID,
+            error: imageError.message,
+          });
+        }
+      }
+    }
 
     // Invalidate feed caches
     await cache.delPattern(`feed:*`);
