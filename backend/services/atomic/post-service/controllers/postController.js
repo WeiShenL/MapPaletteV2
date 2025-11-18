@@ -1,222 +1,367 @@
-const { db } = require('../config/firebase');
-const { FieldValue } = require('firebase-admin/firestore');
+const { db } = require('/app/shared/utils/db');
+const { cache } = require('/app/shared/utils/redis');
 
-exports.createPost = async (req, res) => {
+// Create a new post
+const createPost = async (req, res) => {
   const { userID } = req.params;
+  const { title, description, waypoints, color, region, distance, imageUrl } = req.body;
 
   if (!userID) {
-    return res.status(400).json({ message: 'User ID is required to create a post.' });
+    return res.status(400).json({ message: 'User ID is required' });
   }
 
   console.log(`[CREATE_POST] User ${userID} creating new post`);
 
   try {
-    const docRef = db.collection('posts').doc();
-    const postID = docRef.id;
+    // Get username from user
+    const user = await db.user.findUnique({
+      where: { id: userID },
+      select: { username: true }
+    });
 
-    // Username from frontend
-    const username = req.body.username || 'Unknown User';
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
-    const postData = {
-      userID: userID,
-      username: username,
-      title: req.body.title,
-      description: req.body.description,
-      waypoints: req.body.waypoints,
-      color: req.body.color,
-      likeCount: 0,
-      shareCount: 0,
-      commentCount: 0,
-      image: req.body.image,
-      postID: postID,
-      createdAt: FieldValue.serverTimestamp(),
-      region: req.body.region,
-      distance: req.body.distance
-    };
+    const post = await db.post.create({
+      data: {
+        userId: userID,
+        title,
+        description: description || '',
+        waypoints,
+        color: color || '#FF0000',
+        region,
+        distance: parseFloat(distance),
+        imageUrl: imageUrl || null,
+        likeCount: 0,
+        commentCount: 0,
+        shareCount: 0,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        }
+      }
+    });
 
-    await docRef.set(postData);
+    // Invalidate feed caches
+    await cache.delPattern(`feed:*`);
+    await cache.delPattern(`posts:user:${userID}:*`);
 
-    console.log(`[CREATE_POST] Successfully created post ${postID} for user ${userID}`);
-    return res.status(201).json({ id: postID, message: 'Post created successfully!' });
+    console.log(`[CREATE_POST] Successfully created post ${post.id}`);
+    return res.status(201).json({
+      id: post.id,
+      message: 'Post created successfully!',
+      post
+    });
   } catch (error) {
-    console.error(`[CREATE_POST] Error creating post for user ${userID}:`, error);
-    return res.status(500).send(error);
+    console.error(`[CREATE_POST] Error:`, error);
+    return res.status(500).json({ message: 'Error creating post', error: error.message });
   }
 };
 
-exports.getPost = async (req, res) => {
-  const postID = req.query.id;
+// Get single post by ID (with caching)
+const getPost = async (req, res) => {
+  const { id: postID } = req.query;
 
   if (!postID) {
-    return res.status(400).json({ message: 'Post ID is required.' });
+    return res.status(400).json({ message: 'Post ID is required' });
   }
 
   console.log(`[GET_POST] Fetching post ${postID}`);
 
   try {
-    const postRef = db.collection('posts').doc(postID);
-    const postSnap = await postRef.get();
+    // Try cache first
+    const cacheKey = `post:${postID}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
-    if (!postSnap.exists) {
-      console.log(`[GET_POST] Post ${postID} not found`);
+    const post = await db.post.findUnique({
+      where: { id: postID },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true,
+          }
+        }
+      }
+    });
+
+    if (!post) {
       return res.status(404).json({ message: 'Post not found' });
     }
 
-    const postData = postSnap.data();
-    
-    // Return only post data 
+    // Add counts to main object
+    const postWithCounts = {
+      ...post,
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+      shareCount: post._count.shares,
+    };
+    delete postWithCounts._count;
+
+    // Cache for 30 minutes
+    await cache.set(cacheKey, postWithCounts, 1800);
+
     console.log(`[GET_POST] Successfully fetched post ${postID}`);
-    return res.status(200).json({
-      id: postID,
-      postID: postID, // actl dunnit
-      ...postData
-    });
+    return res.json(postWithCounts);
   } catch (error) {
-    console.error(`[GET_POST] Error fetching post ${postID}:`, error);
-    return res.status(500).json({ message: 'Error fetching post data.' });
+    console.error(`[GET_POST] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching post', error: error.message });
   }
 };
 
-exports.updatePost = async (req, res) => {
-  const postID = req.query.id;
+// Update post
+const updatePost = async (req, res) => {
+  const { id: postID } = req.query;
+  const { title, description, imageUrl } = req.body;
 
   if (!postID) {
-    return res.status(400).json({ message: 'Post ID is required.' });
+    return res.status(400).json({ message: 'Post ID is required' });
   }
 
   console.log(`[UPDATE_POST] Updating post ${postID}`);
 
   try {
-    const postRef = db.collection('posts').doc(postID);
-    await postRef.update(req.body);
+    // Check if post exists and user owns it (should be done by middleware)
+    const post = await db.post.update({
+      where: { id: postID },
+      data: {
+        ...(title && { title }),
+        ...(description !== undefined && { description }),
+        ...(imageUrl !== undefined && { imageUrl }),
+      },
+    });
+
+    // Invalidate cache
+    await cache.del(`post:${postID}`);
+    await cache.delPattern(`feed:*`);
 
     console.log(`[UPDATE_POST] Successfully updated post ${postID}`);
-    return res.status(200).json({ message: 'Post updated successfully!' });
+    return res.json({ message: 'Post updated successfully!', post });
   } catch (error) {
-    console.error(`[UPDATE_POST] Error updating post ${postID}:`, error);
-    return res.status(500).send(error);
+    console.error(`[UPDATE_POST] Error:`, error);
+    return res.status(500).json({ message: 'Error updating post', error: error.message });
   }
 };
 
-exports.deletePost = async (req, res) => {
-  const postID = req.query.id;
+// Delete post
+const deletePost = async (req, res) => {
+  const { id: postID } = req.query;
 
   if (!postID) {
-    return res.status(400).json({ message: 'Post ID is required.' });
+    return res.status(400).json({ message: 'Post ID is required' });
   }
 
   console.log(`[DELETE_POST] Deleting post ${postID}`);
 
   try {
-    const postRef = db.collection('posts').doc(postID);
-    const postSnap = await postRef.get();
+    // Prisma will cascade delete likes, comments, shares automatically
+    await db.post.delete({
+      where: { id: postID }
+    });
 
-    if (!postSnap.exists) {
-      return res.status(404).json({ message: 'Post not found.' });
-    }
-
-    const subcollections = await postRef.listCollections();
-    const batch = db.batch();
-
-    for (const subcollection of subcollections) {
-      const docs = await subcollection.get();
-      docs.forEach((doc) => {
-        batch.delete(doc.ref);
-      });
-    }
-    await batch.commit();
-
-    await postRef.delete();
+    // Invalidate caches
+    await cache.del(`post:${postID}`);
+    await cache.delPattern(`feed:*`);
 
     console.log(`[DELETE_POST] Successfully deleted post ${postID}`);
-    return res.status(200).json({ message: 'Post deleted successfully!' });
+    return res.json({ message: 'Post deleted successfully!' });
   } catch (error) {
-    console.error(`[DELETE_POST] Error deleting post ${postID}:`, error);
-    return res.status(500).json({ message: 'Error deleting post and its subcollections.' });
+    console.error(`[DELETE_POST] Error:`, error);
+    return res.status(500).json({ message: 'Error deleting post', error: error.message });
   }
 };
 
-exports.getAllPosts = async (req, res) => {
-  console.log(`[GET_ALL_POSTS] Fetching all posts`);
+// Get all posts (with pagination)
+const getAllPosts = async (req, res) => {
+  const { page = 1, limit = 20, cursor } = req.query;
+
+  console.log(`[GET_ALL_POSTS] Fetching posts (page: ${page})`);
 
   try {
-    const postsSnap = await db.collection('posts')
-      .orderBy('createdAt', 'desc')
-      .get();
+    const take = parseInt(limit);
 
-    if (postsSnap.empty) {
-      return res.status(200).json([]); // Return empty array
-    }
+    const posts = await db.post.findMany({
+      take: take + 1, // Fetch one extra to check if there are more
+      ...(cursor && {
+        cursor: { id: cursor },
+        skip: 1 // Skip the cursor itself
+      }),
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
 
-    // Return only post data 
-    const posts = postsSnap.docs.map(doc => ({
-      id: doc.id,
-      postID: doc.id, // actl dunnit
-      ...doc.data()
+    const hasMore = posts.length > take;
+    const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
+    const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null;
+
+    // Map to include counts
+    const postsWithCounts = postsToReturn.map(post => ({
+      ...post,
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+      shareCount: post._count.shares,
+      _count: undefined,
     }));
 
-    console.log(`[GET_ALL_POSTS] Successfully fetched ${posts.length} posts`);
-    return res.status(200).json(posts);
-  } catch (error) {
-    console.error(`[GET_ALL_POSTS] Error fetching posts:`, error);
-    return res.status(500).json({ message: 'Error fetching posts.' });
-  }
-};
-
-exports.updateInteractionCount = async (req, res) => {
-  const { id } = req.params;
-  const { field, increment } = req.body;
-  
-  if (!['likeCount', 'commentCount', 'shareCount'].includes(field)) {
-    return res.status(400).json({ message: 'Invalid field' });
-  }
-  
-  console.log(`[UPDATE_COUNT] Updating ${field} by ${increment} for post ${id}`);
-  
-  try {
-    await db.collection('posts').doc(id).update({
-      [field]: FieldValue.increment(increment)
+    return res.json({
+      posts: postsWithCounts,
+      pagination: {
+        hasMore,
+        nextCursor,
+      }
     });
-    
-    console.log(`[UPDATE_COUNT] Successfully updated ${field} for post ${id}`);
-    return res.status(200).json({ message: 'Count updated successfully' });
   } catch (error) {
-    console.error(`[UPDATE_COUNT] Error updating ${field} for post ${id}:`, error);
-    return res.status(500).json({ message: 'Error updating count' });
+    console.error(`[GET_ALL_POSTS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching posts', error: error.message });
   }
 };
 
-exports.getUserPosts = async (req, res) => {
+// Get user's posts (with pagination)
+const getUserPosts = async (req, res) => {
   const { userID } = req.params;
-
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  }
+  const { page = 1, limit = 20, cursor } = req.query;
 
   console.log(`[GET_USER_POSTS] Fetching posts for user ${userID}`);
 
   try {
-    // Query posts by userID 
-    const postsSnap = await db.collection('posts')
-      .where('userID', '==', userID)
-      .orderBy('createdAt', 'desc')
-      .get();
-
-    if (postsSnap.empty) {
-      return res.status(200).json([]); // Return empty array 
+    // Try cache first
+    const cacheKey = `posts:user:${userID}:${cursor || page}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
-    // Return only post data 
-    const posts = postsSnap.docs.map(doc => ({
-      id: doc.id,
-      postID: doc.id, // actl dunnit
-      ...doc.data()
+    const take = parseInt(limit);
+
+    const posts = await db.post.findMany({
+      where: { userId: userID },
+      take: take + 1,
+      ...(cursor && {
+        cursor: { id: cursor },
+        skip: 1
+      }),
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const hasMore = posts.length > take;
+    const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
+    const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null;
+
+    const postsWithCounts = postsToReturn.map(post => ({
+      ...post,
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+      shareCount: post._count.shares,
+      _count: undefined,
     }));
 
-    console.log(`[GET_USER_POSTS] Successfully fetched ${posts.length} posts for user ${userID}`);
-    return res.status(200).json(posts);
+    const result = {
+      posts: postsWithCounts,
+      pagination: {
+        hasMore,
+        nextCursor,
+      }
+    };
+
+    // Cache for 5 minutes
+    await cache.set(cacheKey, result, 300);
+
+    return res.json(result);
   } catch (error) {
-    console.error(`[GET_USER_POSTS] Error fetching posts for user ${userID}:`, error);
-    return res.status(500).json({ message: 'Error fetching user posts.' });
+    console.error(`[GET_USER_POSTS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching user posts', error: error.message });
   }
+};
+
+// Update interaction count (INTERNAL USE - requires service key)
+const updateInteractionCount = async (req, res) => {
+  const { id: postID } = req.params;
+  const { likeCount, commentCount, shareCount } = req.body;
+
+  // Verify service key
+  const serviceKey = req.headers['x-service-key'];
+  if (serviceKey !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: 'Forbidden: Service key required' });
+  }
+
+  try {
+    const post = await db.post.update({
+      where: { id: postID },
+      data: {
+        ...(likeCount !== undefined && { likeCount }),
+        ...(commentCount !== undefined && { commentCount }),
+        ...(shareCount !== undefined && { shareCount }),
+      }
+    });
+
+    // Invalidate cache
+    await cache.del(`post:${postID}`);
+
+    return res.json({ message: 'Counts updated', post });
+  } catch (error) {
+    console.error(`[UPDATE_COUNT] Error:`, error);
+    return res.status(500).json({ message: 'Error updating counts', error: error.message });
+  }
+};
+
+module.exports = {
+  createPost,
+  getPost,
+  updatePost,
+  deletePost,
+  getAllPosts,
+  getUserPosts,
+  updateInteractionCount,
 };

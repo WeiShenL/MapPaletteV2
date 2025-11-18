@@ -1,297 +1,343 @@
-const { db, bucket, auth } = require('../config/firebase');
-const { FieldValue } = require('firebase-admin/firestore');
+const { db } = require('/app/shared/utils/db');
+const { cache } = require('/app/shared/utils/redis');
 
-// Create a new user
+// Create a new user (called after Supabase auth creates the user)
 const createUser = async (req, res) => {
-  const { email, password, username, profilePicture, birthday, gender } = req.body;
+  const { email, username, profilePicture, birthday, gender, userId } = req.body;
 
-  if (!email || !password || !username || !birthday) {
-    return res.status(400).json({ message: 'Email, password, and username are required.' });
+  if (!email || !username || !birthday || !userId) {
+    return res.status(400).json({ message: 'Email, username, birthday, and userId are required.' });
   }
 
-  console.log(`[CREATE_USER] Creating user with email: ${email}, username: ${username}`);
+  console.log(`[CREATE_USER] Creating user: ${username}`);
 
   try {
-    // Create user in Firebase Auth
-    const userRecord = await auth.createUser({
-      email,
-      password,
-      displayName: username
+    // Check if username already exists
+    const existing = await db.user.findUnique({ where: { username } });
+    if (existing) {
+      return res.status(400).json({ message: 'Username already exists' });
+    }
+
+    const userData = await db.user.create({
+      data: {
+        id: userId, // Use Supabase auth user ID
+        email,
+        username,
+        profilePicture: profilePicture || '/resources/default-profile.png',
+        birthday,
+        gender,
+        isProfilePrivate: false,
+        isPostPrivate: false,
+        numFollowers: 0,
+        numFollowing: 0,
+        points: 0,
+      },
     });
 
-    // Create user document in Firestore 
-    const userData = {
-      email,
-      username,
-      profilePicture: profilePicture || '/resources/default-profile.png',
-      createdAt: FieldValue.serverTimestamp(),
-      isProfilePrivate: false,
-      isPostPrivate: false,
-      uid: userRecord.uid,
-      numFollowers: 0,    // Initialize follower count
-      numFollowing: 0,    // Initialize following count
-      points: 0,           // Initialize points for leaderboard
-      birthday,
-      gender
-    };
-
-    await db.collection('users').doc(userRecord.uid).set(userData);
-
-    console.log(`[CREATE_USER] Successfully created user ${userRecord.uid}`);
+    console.log(`[CREATE_USER] Success: ${userData.id}`);
     return res.status(201).json({
       message: 'User created successfully',
-      uid: userRecord.uid,
       user: userData
     });
   } catch (error) {
-    console.error(`[CREATE_USER] Error creating user ${email}:`, error);
-    if (error.code === 'auth/email-already-exists') {
-      return res.status(400).json({ message: 'Email already exists' });
-    }
+    console.error(`[CREATE_USER] Error:`, error);
     return res.status(500).json({ message: 'Error creating user', error: error.message });
   }
 };
 
-// Upload profile picture
-const uploadProfilePicture = async (req, res) => {
-  const { userID } = req.params;
-
-  if (!req.file) {
-    return res.status(400).json({ message: 'No file uploaded' });
-  }
-
-  try {
-    console.log('Starting profile picture upload for user:', userID);
-    console.log('File info:', { 
-      originalname: req.file.originalname, 
-      mimetype: req.file.mimetype, 
-      size: req.file.size 
-    });
-    
-    const filename = `profile-pictures/${userID}-${Date.now()}.${req.file.mimetype.split('/')[1]}`;
-    console.log('Storage filename:', filename);
-    
-    const file = bucket.file(filename);
-
-    const stream = file.createWriteStream({
-      metadata: {
-        contentType: req.file.mimetype,
-      },
-    });
-
-    stream.on('error', (error) => {
-      console.error('Upload error:', error);
-      return res.status(500).json({ message: 'Error uploading file' });
-    });
-
-    stream.on('finish', async () => {
-      try {
-        await file.makePublic();
-        
-        const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
-        console.log('File uploaded, public URL:', publicUrl);
-        
-        // Update user's profile picture URL in Firestore
-        await db.collection('users').doc(userID).update({
-          profilePicture: publicUrl
-        });
-        console.log('User document updated with profile picture URL');
-
-        return res.status(200).json({ 
-          message: 'Profile picture uploaded successfully',
-          url: publicUrl
-        });
-      } catch (updateError) {
-        console.error('Error updating user document:', updateError);
-        return res.status(500).json({ message: 'File uploaded but failed to update user profile' });
-      }
-    });
-
-    stream.end(req.file.buffer);
-  } catch (error) {
-    console.error('Error in uploadProfilePicture:', error);
-    return res.status(500).json({ message: 'Error uploading profile picture' });
-  }
-};
-
-// Get user by ID
+// Get user by ID (with caching)
 const getUserById = async (req, res) => {
   const { userID } = req.params;
 
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  }
-
-  console.log(`[GET_USER] Fetching user ${userID}`);
-
   try {
-    const userRef = db.collection('users').doc(userID);
-    const userSnap = await userRef.get();
-
-    if (!userSnap.exists) {
-      console.log(`[GET_USER] User ${userID} not found`);
-      return res.status(404).json({ message: 'User not found.' });
+    // Try cache first
+    const cacheKey = `user:${userID}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
     }
 
-    console.log(`[GET_USER] Successfully fetched user ${userID}`);
-    return res.status(200).json(userSnap.data());
+    const user = await db.user.findUnique({
+      where: { id: userID },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        profilePicture: true,
+        birthday: true,
+        gender: true,
+        isProfilePrivate: true,
+        isPostPrivate: true,
+        numFollowers: true,
+        numFollowing: true,
+        points: true,
+        createdAt: true,
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Cache for 1 hour
+    await cache.set(cacheKey, user, 3600);
+    return res.json(user);
   } catch (error) {
-    console.error(`[GET_USER] Error fetching user ${userID}:`, error);
-    return res.status(500).json({ message: 'Error fetching user data.' });
+    console.error(`[GET_USER] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching user', error: error.message });
   }
 };
 
-// Get all users
+// Get all users (with pagination)
 const getAllUsers = async (req, res) => {
   try {
-    const usersSnap = await db.collection('users').get();
+    const { page = 1, limit = 20 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const users = await Promise.all(usersSnap.docs.map(async (doc) => {
-      const userData = { id: doc.id, ...doc.data() };
+    const [users, total] = await Promise.all([
+      db.user.findMany({
+        take: parseInt(limit),
+        skip,
+        select: {
+          id: true,
+          username: true,
+          profilePicture: true,
+          points: true,
+          numFollowers: true,
+          numFollowing: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.user.count(),
+    ]);
 
-      if (userData.isProfilePrivate) return undefined;
-
-      const subcollectionRefs = await db.collection('users').doc(doc.id).listCollections();
-
-      for (const subcollectionRef of subcollectionRefs) {
-        const subcollectionDocs = await subcollectionRef.get();
-        userData[subcollectionRef.id] = subcollectionDocs.docs.map(subDoc => ({
-          id: subDoc.id,
-          ...subDoc.data()
-        }));
-      }
-
-      return userData;
-    }));
-
-    const filteredUsers = users.filter(user => user !== undefined);
-    return res.status(200).json(filteredUsers);
-    
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    return res.status(500).json({ message: 'Error fetching users' });
-  }
-};
-
-// Get user's followers
-const getUserFollowers = async (req, res) => {
-  const { userID } = req.params;
-  
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  } 
-
-  try {
-    const followersSnap = await db.collection('users').doc(userID).collection('followers').get();
-
-    if (followersSnap.empty) {
-      return res.status(404).json({ message: 'No followers found for this user.' });
-    }
-
-    const followersUserIDs = followersSnap.docs.map(doc => doc.id);
-
-    const followersUsersPromises = followersUserIDs.map(async (followerUserID) => {
-      const userDoc = await db.collection('users').doc(followerUserID).get();
-      return userDoc.exists ? { userID: followerUserID, ...userDoc.data() } : null;
+    return res.json({
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
     });
-
-    const followersUsers = (await Promise.all(followersUsersPromises)).filter(user => user !== null);
-
-    return res.status(200).json(followersUsers);
   } catch (error) {
-    console.error('Error fetching followers:', error);
-    return res.status(500).json({ message: 'Error fetching followers.' });
+    console.error(`[GET_ALL_USERS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching users', error: error.message });
   }
 };
 
-// Get users that current user is following
-const getUserFollowing = async (req, res) => {
-  const { userID } = req.params;
-
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  }
-
-  try {
-    const followingSnap = await db.collection('users').doc(userID).collection('following').get();
-
-    if (followingSnap.empty) {
-      return res.status(404).json({ message: 'No following users found for this user.' });
-    }
-
-    const followingUserIDs = followingSnap.docs.map(doc => doc.id);
-
-    const followingUsersPromises = followingUserIDs.map(async (followingUserID) => {
-      const userDoc = await db.collection('users').doc(followingUserID).get();
-      return userDoc.exists ? { userID: followingUserID, ...userDoc.data() } : null;
-    });
-
-    const followingUsers = (await Promise.all(followingUsersPromises)).filter(user => user !== null);
-
-    return res.status(200).json(followingUsers);
-  } catch (error) {
-    console.error('Error fetching following users:', error);
-    return res.status(500).json({ message: 'Error fetching following users.' });
-  }
-};
-
-// Get condensed user data with following status
+// Get condensed users with following status (with pagination)
 const getCondensedUsers = async (req, res) => {
   const { currentUserID } = req.params;
-
-  if (!currentUserID) {
-    return res.status(400).json({ message: 'Current user ID is required.' });
-  }
+  const { page = 1, limit = 20 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    const usersSnap = await db.collection('users').get();
+    const [users, total, following] = await Promise.all([
+      db.user.findMany({
+        where: { id: { not: currentUserID } },
+        take: parseInt(limit),
+        skip,
+        select: {
+          id: true,
+          username: true,
+          profilePicture: true,
+          points: true,
+        },
+        orderBy: { points: 'desc' },
+      }),
+      db.user.count({ where: { id: { not: currentUserID } } }),
+      db.follow.findMany({
+        where: { followerId: currentUserID },
+        select: { followingId: true },
+      }),
+    ]);
 
-    const followingSnap = await db.collection('users').doc(currentUserID).collection('following').get();
-    const followingIDs = followingSnap.docs.map(doc => doc.id);
+    const followingIds = new Set(following.map(f => f.followingId));
 
-    const condensedUsers = usersSnap.docs.map(doc => {
-      const userData = doc.data();
-      const isFollowing = followingIDs.includes(doc.id);
+    const usersWithFollowStatus = users.map(user => ({
+      ...user,
+      isFollowing: followingIds.has(user.id),
+    }));
 
-      if (userData.isProfilePrivate && !isFollowing) return undefined;
-
-      return {
-        userID: doc.id,
-        username: userData.username || null,
-        profilePicture: userData.profilePicture || null,
-        isFollowing: isFollowing
-      };
+    return res.json({
+      users: usersWithFollowStatus,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
     });
-
-    const filteredCondensedUsers = condensedUsers.filter(user => user !== undefined);
-    return res.status(200).json(filteredCondensedUsers);
   } catch (error) {
-    console.error('Error fetching condensed user data:', error);
-    return res.status(500).json({ message: 'Error fetching condensed user data.' });
+    console.error(`[GET_CONDENSED_USERS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching users', error: error.message });
   }
 };
 
+// Get user's followers (with pagination)
+const getUserFollowers = async (req, res) => {
+  const { userID } = req.params;
+  const { page = 1, limit = 20 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
 
-// Update username
+  try {
+    const [followers, total] = await Promise.all([
+      db.follow.findMany({
+        where: { followingId: userID },
+        take: parseInt(limit),
+        skip,
+        select: {
+          follower: {
+            select: {
+              id: true,
+              username: true,
+              profilePicture: true,
+              points: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.follow.count({ where: { followingId: userID } }),
+    ]);
+
+    const users = followers.map(f => f.follower);
+
+    return res.json({
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error(`[GET_FOLLOWERS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching followers', error: error.message });
+  }
+};
+
+// Get user's following (with pagination)
+const getUserFollowing = async (req, res) => {
+  const { userID } = req.params;
+  const { page = 1, limit = 20 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const [following, total] = await Promise.all([
+      db.follow.findMany({
+        where: { followerId: userID },
+        take: parseInt(limit),
+        skip,
+        select: {
+          following: {
+            select: {
+              id: true,
+              username: true,
+              profilePicture: true,
+              points: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.follow.count({ where: { followerId: userID } }),
+    ]);
+
+    const users = following.map(f => f.following);
+
+    return res.json({
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error(`[GET_FOLLOWING] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching following', error: error.message });
+  }
+};
+
+// Get user's liked posts (with pagination - FIXED!)
+const getUserLikedPosts = async (req, res) => {
+  const { userID } = req.params;
+  const { page = 1, limit = 20 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  try {
+    const [likes, total] = await Promise.all([
+      db.like.findMany({
+        where: { userId: userID },
+        take: parseInt(limit),
+        skip,
+        select: {
+          post: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  username: true,
+                  profilePicture: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      db.like.count({ where: { userId: userID } }),
+    ]);
+
+    const posts = likes.map(l => l.post);
+
+    return res.json({
+      posts,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    });
+  } catch (error) {
+    console.error(`[GET_LIKED_POSTS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching liked posts', error: error.message });
+  }
+};
+
+// Update username (requires ownership - checked by middleware)
 const updateUsername = async (req, res) => {
   const { userID } = req.params;
   const { username } = req.body;
 
   if (!username) {
-    return res.status(400).json({ message: 'Username is required.' });
+    return res.status(400).json({ message: 'Username is required' });
   }
 
-  console.log(`[UPDATE_USERNAME] Updating username for user ${userID} to ${username}`);
-
   try {
-    const userRef = db.collection('users').doc(userID);
-    await userRef.update({ username });
+    // Check if username is taken
+    const existing = await db.user.findUnique({ where: { username } });
+    if (existing && existing.id !== userID) {
+      return res.status(400).json({ message: 'Username already taken' });
+    }
 
-    console.log(`[UPDATE_USERNAME] Successfully updated username for user ${userID}`);
-    return res.status(200).json({ message: 'Username updated successfully!' });
+    const user = await db.user.update({
+      where: { id: userID },
+      data: { username },
+    });
+
+    // Invalidate cache
+    await cache.del(`user:${userID}`);
+
+    return res.json({ message: 'Username updated', user });
   } catch (error) {
-    console.error(`[UPDATE_USERNAME] Error updating username for user ${userID}:`, error);
-    return res.status(500).json({ message: 'Error updating username.' });
+    console.error(`[UPDATE_USERNAME] Error:`, error);
+    return res.status(500).json({ message: 'Error updating username', error: error.message });
   }
 };
 
@@ -301,68 +347,21 @@ const updateProfilePicture = async (req, res) => {
   const { profilePicture } = req.body;
 
   if (!profilePicture) {
-    return res.status(400).json({ message: 'Profile picture URL is required.' });
+    return res.status(400).json({ message: 'Profile picture URL is required' });
   }
 
   try {
-    const userRef = db.collection('users').doc(userID);
-    const userSnap = await userRef.get();
+    const user = await db.user.update({
+      where: { id: userID },
+      data: { profilePicture },
+    });
 
-    if (!userSnap.exists) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
+    await cache.del(`user:${userID}`);
 
-    const existingProfilePicture = userSnap.data().profilePicture;
-
-    if (existingProfilePicture && existingProfilePicture !== profilePicture) {
-      const fileName = existingProfilePicture.split('/').pop();
-      const file = bucket.file(fileName);
-
-      try {
-        await file.delete();
-        console.log('Previous profile picture deleted successfully.');
-      } catch (error) {
-        console.error('Error deleting previous profile picture:', error);
-      }
-    }
-
-    await userRef.update({ profilePicture });
-
-    return res.status(200).json({ message: 'Profile picture updated successfully!' });
+    return res.json({ message: 'Profile picture updated', user });
   } catch (error) {
-    console.error('Error updating profile picture:', error);
-    return res.status(500).json({ message: 'Error updating profile picture.' });
-  }
-};
-
-// Get user's liked posts
-const getUserLikedPosts = async (req, res) => {
-  const { userID } = req.params;
-
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  }
-
-  try {
-    const postsSnap = await db.collection('posts').get();
-
-    if (postsSnap.empty) {
-      return res.status(404).json({ message: 'No posts found.' });
-    }
-
-    const likedPosts = [];
-
-    await Promise.all(postsSnap.docs.map(async (postDoc) => {
-      const likeSnap = await postDoc.ref.collection('likes').doc(userID).get();
-      if (likeSnap.exists) {
-        likedPosts.push(postDoc.id);
-      }
-    }));
-
-    return res.status(200).json({ likedPostIDs: likedPosts });
-  } catch (error) {
-    console.error('Error fetching liked posts:', error);
-    return res.status(500).json({ message: 'Error fetching liked posts.' });
+    console.error(`[UPDATE_PROFILE_PICTURE] Error:`, error);
+    return res.status(500).json({ message: 'Error updating profile picture', error: error.message });
   }
 };
 
@@ -371,262 +370,236 @@ const updatePrivacySettings = async (req, res) => {
   const { userID } = req.params;
   const { isProfilePrivate, isPostPrivate } = req.body;
 
-  if (typeof isProfilePrivate === 'undefined' || typeof isPostPrivate === 'undefined') {
-    return res.status(400).json({ message: 'Both isProfilePrivate and isPostPrivate are required.' });
-  }
-
-  console.log(`[UPDATE_PRIVACY] Updating privacy for user ${userID}: profile=${isProfilePrivate}, posts=${isPostPrivate}`);
-
   try {
-    const userRef = db.collection('users').doc(userID);
-    await userRef.update({
-      isProfilePrivate,
-      isPostPrivate
+    const user = await db.user.update({
+      where: { id: userID },
+      data: {
+        ...(isProfilePrivate !== undefined && { isProfilePrivate }),
+        ...(isPostPrivate !== undefined && { isPostPrivate }),
+      },
     });
-    console.log(`[UPDATE_PRIVACY] Successfully updated privacy settings for user ${userID}`);
-    return res.status(200).json({ message: 'Privacy settings updated successfully!' });
+
+    await cache.del(`user:${userID}`);
+
+    return res.json({ message: 'Privacy settings updated', user });
   } catch (error) {
-    console.error(`[UPDATE_PRIVACY] Error updating privacy settings for user ${userID}:`, error);
-    return res.status(500).json({ message: 'Error updating privacy settings.' });
+    console.error(`[UPDATE_PRIVACY] Error:`, error);
+    return res.status(500).json({ message: 'Error updating privacy', error: error.message });
   }
 };
 
-// Delete user (Admin only)
+// Delete user (admin only)
 const deleteUser = async (req, res) => {
   const { userID } = req.params;
 
-  if (!userID) {
-    return res.status(400).json({ message: 'User ID is required.' });
-  }
-
   try {
-    // TODO: Add admin authentication check here
-    
-    const userRef = db.collection('users').doc(userID);
-    const userSnap = await userRef.get();
+    await db.user.delete({ where: { id: userID } });
+    await cache.del(`user:${userID}`);
 
-    if (!userSnap.exists) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    // Delete user document
-    await userRef.delete();
-
-    return res.status(200).json({ message: 'User deleted successfully!' });
+    return res.json({ message: 'User deleted successfully' });
   } catch (error) {
-    console.error('Error deleting user:', error);
-    return res.status(500).json({ message: 'Error deleting user.' });
+    console.error(`[DELETE_USER] Error:`, error);
+    return res.status(500).json({ message: 'Error deleting user', error: error.message });
   }
 };
 
-// Assign default profile picture (Admin only??)
-const assignDefaultProfilePicture = async (req, res) => {
-  try {
-    // TODO: Add admin authentication check here?
-    
-    const usersSnap = await db.collection('users').get();
-    const defaultProfilePicture = '/resources/default-profile.png';
-
-    const updatePromises = usersSnap.docs.map(async (doc) => {
-      const userData = doc.data();
-      if (!userData.profilePicture) {
-        await doc.ref.update({ profilePicture: defaultProfilePicture });
-      }
-    });
-
-    await Promise.all(updatePromises);
-
-    return res.status(200).json({ message: 'Default profile pictures assigned successfully!' });
-  } catch (error) {
-    console.error('Error assigning default profile pictures:', error);
-    return res.status(500).json({ message: 'Error assigning default profile pictures.' });
-  }
-};
-
-// Update user points
+// Update user points (INTERNAL USE ONLY - requires service key)
 const updateUserPoints = async (req, res) => {
   const { userID } = req.params;
-  const { points } = req.body;
+  const { pointsToAdd } = req.body;
 
-  if (typeof points !== 'number') {
-    return res.status(400).json({ message: 'Points must be a number.' });
+  // Verify service key for internal service calls
+  const serviceKey = req.headers['x-service-key'];
+  if (serviceKey !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: 'Forbidden: Service key required' });
   }
 
-  console.log(`[UPDATE_POINTS] Adding ${points} points to user ${userID}`);
-
   try {
-    const userRef = db.collection('users').doc(userID);
-    await userRef.update({
-      points: FieldValue.increment(points)
+    const user = await db.user.update({
+      where: { id: userID },
+      data: {
+        points: { increment: pointsToAdd || 0 },
+      },
     });
-    
-    console.log(`[UPDATE_POINTS] Successfully added ${points} points to user ${userID}`);
-    return res.status(200).json({ message: 'User points updated successfully!' });
+
+    await cache.del(`user:${userID}`);
+    await cache.del('leaderboard:*'); // Invalidate leaderboard cache
+
+    return res.json({ message: 'Points updated', user });
   } catch (error) {
-    console.error(`[UPDATE_POINTS] Error updating points for user ${userID}:`, error);
-    return res.status(500).json({ message: 'Error updating user points.' });
+    console.error(`[UPDATE_POINTS] Error:`, error);
+    return res.status(500).json({ message: 'Error updating points', error: error.message });
   }
 };
 
-// Update user counts (followers, following, etc.)
+// Update user count (INTERNAL USE ONLY - requires service key)
 const updateUserCount = async (req, res) => {
   const { userID } = req.params;
-  const { field, increment } = req.body;
+  const { numFollowers, numFollowing } = req.body;
 
-  if (!field || typeof increment !== 'number') {
-    return res.status(400).json({ message: 'Field and increment are required.' });
+  // Verify service key
+  const serviceKey = req.headers['x-service-key'];
+  if (serviceKey !== process.env.INTERNAL_SERVICE_KEY) {
+    return res.status(403).json({ message: 'Forbidden: Service key required' });
   }
-
-  // Validate allowed fields
-  const allowedFields = ['numFollowers', 'numFollowing', 'followersCount', 'followingCount', 'likeCount', 'commentCount', 'shareCount'];
-  if (!allowedFields.includes(field)) {
-    return res.status(400).json({ message: 'Invalid field. Allowed fields: ' + allowedFields.join(', ') });
-  }
-
-  console.log(`[UPDATE_COUNT] Updating ${field} by ${increment} for user ${userID}`);
 
   try {
-    const userRef = db.collection('users').doc(userID);
-    await userRef.update({
-      [field]: FieldValue.increment(increment)
+    const user = await db.user.update({
+      where: { id: userID },
+      data: {
+        ...(numFollowers !== undefined && { numFollowers }),
+        ...(numFollowing !== undefined && { numFollowing }),
+      },
     });
-    
-    console.log(`[UPDATE_COUNT] Successfully updated ${field} for user ${userID}`);
-    return res.status(200).json({ message: `User ${field} updated successfully!` });
+
+    await cache.del(`user:${userID}`);
+
+    return res.json({ message: 'Count updated', user });
   } catch (error) {
-    console.error(`[UPDATE_COUNT] Error updating ${field} for user ${userID}:`, error);
-    return res.status(500).json({ message: `Error updating user ${field}.` });
+    console.error(`[UPDATE_COUNT] Error:`, error);
+    return res.status(500).json({ message: 'Error updating count', error: error.message });
   }
 };
 
-// Batch get users by IDs
+// Get users batch
 const getUsersBatch = async (req, res) => {
   const { userIds } = req.body;
 
-  if (!userIds || !Array.isArray(userIds) || userIds.length === 0) {
-    return res.status(400).json({ message: 'User IDs array is required' });
+  if (!userIds || !Array.isArray(userIds)) {
+    return res.status(400).json({ message: 'userIds array is required' });
   }
-
-  // Limit batch size to prevent query issues
-  if (userIds.length > 30) {
-    return res.status(400).json({ message: 'Maximum 30 users per batch request' });
-  }
-
-  console.log(`[BATCH_USERS] Fetching ${userIds.length} users`);
 
   try {
-    // Remove duplicates
-    const uniqueUserIds = [...new Set(userIds)];
-    
-    // Initialize result object
-    const result = {};
-    
-    // Fetch all users in parallel
-    const userPromises = uniqueUserIds.map(async (userId) => {
-      try {
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (userDoc.exists) {
-          const userData = userDoc.data();
-          result[userId] = {
-            id: userId,
-            username: userData.username,
-            profilePicture: userData.profilePicture || '/resources/default-profile.png',
-            email: userData.email,
-            isProfilePrivate: userData.isProfilePrivate || false,
-            isPostPrivate: userData.isPostPrivate || false,
-            numFollowers: userData.numFollowers || 0,
-            numFollowing: userData.numFollowing || 0,
-            points: userData.points || 0,
-            createdAt: userData.createdAt,
-            birthday: userData.birthday,
-            gender: userData.gender
-          };
-        } else {
-          // Return default data for non-existent users
-          result[userId] = {
-            id: userId,
-            username: 'Unknown User',
-            profilePicture: '/resources/default-profile.png',
-            isProfilePrivate: false,
-            isPostPrivate: false,
-            numFollowers: 0,
-            numFollowing: 0
-          };
-        }
-      } catch (error) {
-        console.error(`Error fetching user ${userId}:`, error);
-        // Return default data on error
-        result[userId] = {
-          id: userId,
-          username: 'Unknown User',
-          profilePicture: '/resources/default-profile.png',
-          isProfilePrivate: false,
-          isPostPrivate: false,
-          numFollowers: 0,
-          numFollowing: 0
-        };
-      }
+    const users = await db.user.findMany({
+      where: { id: { in: userIds } },
+      select: {
+        id: true,
+        username: true,
+        profilePicture: true,
+        points: true,
+      },
     });
-    
-    await Promise.all(userPromises);
-    
-    console.log(`[BATCH_USERS] Successfully fetched ${Object.keys(result).length} users`);
-    return res.status(200).json(result);
+
+    return res.json(users);
   } catch (error) {
-    console.error(`[BATCH_USERS] Error fetching batch users:`, error);
+    console.error(`[GET_USERS_BATCH] Error:`, error);
     return res.status(500).json({ message: 'Error fetching users', error: error.message });
   }
 };
 
-// Get all users for leaderboard (excludes private profiles)
+// Get leaderboard (with caching and pagination)
 const getUsersForLeaderboard = async (req, res) => {
-  console.log(`[LEADERBOARD] Fetching users for leaderboard`);
+  const { page = 1, limit = 50 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
 
   try {
-    const usersSnap = await db.collection('users').get();
+    // Try cache first
+    const cacheKey = `leaderboard:${page}:${limit}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
 
-    const users = usersSnap.docs.map(doc => {
-      const userData = doc.data();
-      
-      // Only return public profiles with points > 0
-      if (userData.isProfilePrivate || (userData.points || 0) <= 0) {
-        return null;
-      }
+    const [users, total] = await Promise.all([
+      db.user.findMany({
+        take: parseInt(limit),
+        skip,
+        select: {
+          id: true,
+          username: true,
+          profilePicture: true,
+          points: true,
+        },
+        orderBy: { points: 'desc' },
+      }),
+      db.user.count(),
+    ]);
 
-      return {
-        userId: doc.id,
-        username: userData.username,
-        profilePicture: userData.profilePicture || '/resources/default-profile.png',
-        points: userData.points || 0,
-        isProfilePrivate: userData.isProfilePrivate || false,
-        createdAt: userData.createdAt
-      };
-    }).filter(user => user !== null);
+    const result = {
+      users,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit)),
+      },
+    };
 
-    console.log(`[LEADERBOARD] Found ${users.length} eligible users for leaderboard`);
-    return res.status(200).json(users);
+    // Cache for 5 minutes
+    await cache.set(cacheKey, result, 300);
+
+    return res.json(result);
   } catch (error) {
-    console.error(`[LEADERBOARD] Error fetching users:`, error);
-    return res.status(500).json({ message: 'Error fetching leaderboard data', error: error.message });
+    console.error(`[LEADERBOARD] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching leaderboard', error: error.message });
+  }
+};
+
+// Upload profile picture (using Supabase Storage)
+const uploadProfilePicture = async (req, res) => {
+  const { userID } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  try {
+    // TODO: Implement Supabase Storage upload
+    // For now, return a placeholder
+    const publicUrl = `/uploads/${userID}-${Date.now()}.jpg`;
+
+    await db.user.update({
+      where: { id: userID },
+      data: { profilePicture: publicUrl },
+    });
+
+    await cache.del(`user:${userID}`);
+
+    return res.json({
+      message: 'Profile picture uploaded',
+      profilePicture: publicUrl
+    });
+  } catch (error) {
+    console.error(`[UPLOAD_PROFILE_PICTURE] Error:`, error);
+    return res.status(500).json({ message: 'Error uploading profile picture', error: error.message });
+  }
+};
+
+// Assign default profile picture (admin only)
+const assignDefaultProfilePicture = async (req, res) => {
+  try {
+    await db.user.updateMany({
+      where: {
+        profilePicture: { equals: null },
+      },
+      data: {
+        profilePicture: '/resources/default-profile.png',
+      },
+    });
+
+    return res.json({ message: 'Default profile pictures assigned' });
+  } catch (error) {
+    console.error(`[ASSIGN_DEFAULT_PROFILE] Error:`, error);
+    return res.status(500).json({ message: 'Error assigning default profiles', error: error.message });
   }
 };
 
 module.exports = {
   createUser,
-  uploadProfilePicture,
   getUserById,
   getAllUsers,
+  getCondensedUsers,
   getUserFollowers,
   getUserFollowing,
-  getCondensedUsers,
+  getUserLikedPosts,
   updateUsername,
   updateProfilePicture,
-  getUserLikedPosts,
   updatePrivacySettings,
   deleteUser,
-  assignDefaultProfilePicture,
   updateUserPoints,
   updateUserCount,
   getUsersBatch,
-  getUsersForLeaderboard
+  getUsersForLeaderboard,
+  uploadProfilePicture,
+  assignDefaultProfilePicture,
 };

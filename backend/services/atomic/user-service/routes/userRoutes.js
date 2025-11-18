@@ -1,76 +1,76 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const userController = require('../controllers/userController');
-const { verifyToken, verifyOwnership, verifyAdmin } = require('../middleware/auth');
+const userController = require('../controllers/userController.new');
+const { verifyAuth, verifyOwnership } = require('/app/shared/middleware/auth');
+const { validate } = require('/app/shared/middleware/validation');
+const { rateLimiters } = require('/app/shared/middleware/rateLimit');
+const { createUserSchema, updateUserSchema } = require('/app/shared/schemas/user');
 
-// Configure multer for file uploads
+// Configure multer
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = allowedTypes.test(file.mimetype);
     if (mimetype) {
       return cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
     }
   }
 });
 
-// Create a new user
-router.post('/create', userController.createUser);
-
-// Upload profile picture
-router.post('/upload-profile-picture/:userID', upload.single('profilePicture'), userController.uploadProfilePicture);
-
-// Get all users (must be before /:userID route)
+// Public routes
+router.post('/create', rateLimiters.strict, validate(createUserSchema), userController.createUser);
 router.get('/getallusers', userController.getAllUsers);
 router.get('/all', userController.getAllUsers);
-
-// Get condensed user data with following status
 router.get('/getcondensed/:currentUserID', userController.getCondensedUsers);
-
-// Get user's followers
-router.get('/getfollowers/:userID', userController.getUserFollowers);
-
-// Get users that current user is following
-router.get('/following/:userID', userController.getUserFollowing);
-
-// Get user by ID (must be after specific routes)
 router.get('/:userID', userController.getUserById);
-
-// Get user's liked posts
 router.get('/:userID/likedPosts', userController.getUserLikedPosts);
+router.get('/getfollowers/:userID', userController.getUserFollowers);
+router.get('/following/:userID', userController.getUserFollowing);
+router.post('/batch', rateLimiters.moderate, userController.getUsersBatch);
+router.get('/leaderboard/all', userController.getUsersForLeaderboard);
 
-// Update username (requires authentication and ownership)
-router.put('/update/username/:userID', verifyToken, verifyOwnership, userController.updateUsername);
+// Protected routes (requires authentication)
+router.post(
+  '/upload-profile-picture/:userID',
+  verifyAuth,
+  verifyOwnership('userID'),
+  upload.single('profilePicture'),
+  userController.uploadProfilePicture
+);
 
-// Update profile picture (requires authentication and ownership)
-router.put('/update/profilePicture/:userID', verifyToken, verifyOwnership, userController.updateProfilePicture);
+router.put(
+  '/update/username/:userID',
+  verifyAuth,
+  verifyOwnership('userID'),
+  userController.updateUsername
+);
 
-// Update privacy settings (requires authentication and ownership)
-router.put('/:userID/privacy', verifyToken, verifyOwnership, userController.updatePrivacySettings);
+router.put(
+  '/update/profilePicture/:userID',
+  verifyAuth,
+  verifyOwnership('userID'),
+  userController.updateProfilePicture
+);
 
-// Delete user (Admin only)
-router.delete('/:userID/delete', verifyToken, verifyAdmin, userController.deleteUser);
+router.put(
+  '/:userID/privacy',
+  verifyAuth,
+  verifyOwnership('userID'),
+  userController.updatePrivacySettings
+);
 
-// Assign default profile pictures (Admin only)
-router.put('/assignDefaultProfilePicture', verifyToken, verifyAdmin, userController.assignDefaultProfilePicture);
-
-
-// Points management
+// Internal service routes (require service key)
 router.put('/:userID/points', userController.updateUserPoints);
-
-// Count management (followers, following, etc.)
 router.patch('/:userID/count', userController.updateUserCount);
 
-// Batch endpoints
-router.post('/batch', userController.getUsersBatch);
-
-// Leaderboard endpoint
-router.get('/leaderboard', userController.getUsersForLeaderboard);
+// Admin routes (require service key for now)
+router.delete('/:userID/delete', userController.deleteUser);
+router.put('/assignDefaultProfilePicture', userController.assignDefaultProfilePicture);
 
 module.exports = router;

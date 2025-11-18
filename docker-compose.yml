@@ -128,8 +128,8 @@ services:
 
   user-service:
     build:
-      context: ./backend/services/atomic/user-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/atomic/user-service/Dockerfile
     container_name: mappalette-user-service
     restart: unless-stopped
     depends_on:
@@ -148,13 +148,12 @@ services:
       - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
-    volumes:
-      - ./backend/shared:/app/shared:ro
+    working_dir: /app/services/atomic/user-service
 
   post-service:
     build:
-      context: ./backend/services/atomic/post-service
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: services/atomic/post-service/Dockerfile
     container_name: mappalette-post-service
     restart: unless-stopped
     depends_on:
@@ -173,8 +172,7 @@ services:
       - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
-    volumes:
-      - ./backend/shared:/app/shared:ro
+    working_dir: /app/services/atomic/post-service
 
   interaction-service:
     build:

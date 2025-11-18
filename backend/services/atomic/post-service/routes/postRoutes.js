@@ -1,25 +1,42 @@
 const express = require('express');
 const router = express.Router();
-const postController = require('../controllers/postController');
-const commentController = require('../controllers/commentController');
+const postController = require('../controllers/postController.new');
+const { verifyAuth, verifyOwnership, optionalAuth } = require('/app/shared/middleware/auth');
+const { validate } = require('/app/shared/middleware/validation');
+const { rateLimiters } = require('/app/shared/middleware/rateLimit');
+const { createPostSchema, updatePostSchema } = require('/app/shared/schemas/post');
 
-// Post CRUD operations
-router.post('/create/:userID', postController.createPost);
-router.get('/posts', postController.getPost);
-router.put('/posts', postController.updatePost);
-router.delete('/posts', postController.deletePost);
+// Public routes
+router.get('/allposts', optionalAuth, postController.getAllPosts);
+router.get('/posts', optionalAuth, postController.getPost);
+router.get('/users/:userID/posts', optionalAuth, postController.getUserPosts);
 
-// Post retrieval operations
-router.get('/allposts', postController.getAllPosts);
-router.get('/users/:userID/posts', postController.getUserPosts);
+// Protected routes (requires authentication)
+router.post(
+  '/create/:userID',
+  verifyAuth,
+  verifyOwnership('userID'),
+  rateLimiters.moderate,
+  validate(createPostSchema),
+  postController.createPost
+);
 
-// Comment operations
-router.post('/posts/:postId/comments', commentController.createComment);
-router.get('/posts/:postId/comments', commentController.getComments);
-router.put('/posts/:postId/comments/:commentId', commentController.updateComment);
-router.delete('/posts/:postId/comments/:commentId', commentController.deleteComment);
+router.put(
+  '/posts',
+  verifyAuth,
+  rateLimiters.moderate,
+  validate(updatePostSchema),
+  postController.updatePost
+);
 
-// Update interaction counts (for Interaction Service)
+router.delete(
+  '/posts',
+  verifyAuth,
+  rateLimiters.moderate,
+  postController.deletePost
+);
+
+// Internal service route (requires service key)
 router.patch('/posts/:id/count', postController.updateInteractionCount);
 
 module.exports = router;

@@ -2,14 +2,17 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
-
-# Install dependencies
-RUN npm install --production
-
-# Copy service code
+# Copy entire backend
 COPY . .
+
+# Install shared dependencies and generate Prisma
+WORKDIR /app/shared
+RUN npm install
+RUN npx prisma generate || true
+
+# Install service dependencies
+WORKDIR /app/services/atomic/user-service
+RUN npm install --production
 
 EXPOSE 5000
 
