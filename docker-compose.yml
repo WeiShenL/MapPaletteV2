@@ -1,0 +1,310 @@
+# MapPaletteV2 - Complete Stack
+# Usage:
+#   Start:    docker compose up -d
+#   Stop:     docker compose down
+#   Destroy:  docker compose down -v
+#   Logs:     docker compose logs -f [service-name]
+
+name: mappalette
+
+services:
+  # ====================
+  # SUPABASE CORE (Minimal Setup)
+  # ====================
+
+  supabase-db:
+    container_name: mappalette-supabase-db
+    image: supabase/postgres:15.8.1.060
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-h', 'localhost']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_HOST: /var/run/postgresql
+      POSTGRES_PORT: 5432
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP: ${JWT_EXPIRY:-3600}
+    volumes:
+      - supabase-db-data:/var/lib/postgresql/data
+    networks:
+      - mappalette-network
+    command: ['postgres', '-c', 'log_min_messages=warning']
+
+  supabase-auth:
+    container_name: mappalette-supabase-auth
+    image: supabase/gotrue:v2.177.0
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:9999/health']
+      timeout: 5s
+      interval: 5s
+      retries: 3
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      GOTRUE_SITE_URL: ${SITE_URL}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-}
+      GOTRUE_DISABLE_SIGNUP: ${DISABLE_SIGNUP:-false}
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+    networks:
+      - mappalette-network
+
+  supabase-rest:
+    container_name: mappalette-supabase-rest
+    image: postgrest/postgrest:v12.2.12
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      PGRST_DB_SCHEMAS: ${PGRST_DB_SCHEMAS:-public,storage,graphql_public}
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_USE_LEGACY_GUCS: 'false'
+    networks:
+      - mappalette-network
+
+  supabase-kong:
+    container_name: mappalette-supabase-kong
+    image: kong:2.8.1
+    restart: unless-stopped
+    ports:
+      - "${KONG_HTTP_PORT:-8000}:8000"
+    environment:
+      KONG_DATABASE: 'off'
+      KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+    volumes:
+      - ./supabase/kong.yml:/usr/local/kong/kong.yml:ro
+    networks:
+      - mappalette-network
+
+  # ====================
+  # REDIS CACHE
+  # ====================
+
+  redis:
+    container_name: mappalette-redis
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - mappalette-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+
+  # ====================
+  # ATOMIC SERVICES
+  # ====================
+
+  user-service:
+    build:
+      context: ./backend/services/atomic/user-service
+      dockerfile: Dockerfile
+    container_name: mappalette-user-service
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${USER_SERVICE_PORT:-3001}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  post-service:
+    build:
+      context: ./backend/services/atomic/post-service
+      dockerfile: Dockerfile
+    container_name: mappalette-post-service
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${POST_SERVICE_PORT:-3002}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  interaction-service:
+    build:
+      context: ./backend/services/atomic/interaction-service
+      dockerfile: Dockerfile
+    container_name: mappalette-interaction-service
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${INTERACTION_SERVICE_PORT:-3003}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  follow-service:
+    build:
+      context: ./backend/services/atomic/follow-service
+      dockerfile: Dockerfile
+    container_name: mappalette-follow-service
+    restart: unless-stopped
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${FOLLOW_SERVICE_PORT:-3007}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  # ====================
+  # COMPOSITE SERVICES
+  # ====================
+
+  feed-service:
+    build:
+      context: ./backend/services/composite/feed-service
+      dockerfile: Dockerfile
+    container_name: mappalette-feed-service
+    restart: unless-stopped
+    depends_on:
+      - user-service
+      - post-service
+      - interaction-service
+      - follow-service
+    ports:
+      - "${FEED_SERVICE_PORT:-3004}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user-service:5000
+      - POST_SERVICE_URL=http://post-service:5000
+      - INTERACTION_SERVICE_URL=http://interaction-service:5000
+      - FOLLOW_SERVICE_URL=http://follow-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  # ====================
+  # FRONTEND
+  # ====================
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
+        - VITE_SUPABASE_URL=${SUPABASE_PUBLIC_URL}
+        - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    container_name: mappalette-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    networks:
+      - mappalette-network
+
+  # ====================
+  # REVERSE PROXY
+  # ====================
+
+  caddy:
+    container_name: mappalette-caddy
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - mappalette-network
+    depends_on:
+      - frontend
+      - feed-service
+
+networks:
+  mappalette-network:
+    driver: bridge
+
+volumes:
+  supabase-db-data:
+  redis-data:
+  caddy-data:
+  caddy-config:

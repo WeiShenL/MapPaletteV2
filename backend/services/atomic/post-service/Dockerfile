@@ -2,14 +2,15 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# package files
+# Copy package files
 COPY package*.json ./
 
-# install dependencies
-RUN npm ci --only=production
+# Install dependencies
+RUN npm install --production
 
-# cpy app files
+# Copy service code
 COPY . .
 
-# start the application
-CMD ["node", "src/index.js"]
+EXPOSE 5000
+
+CMD ["npm", "start"]
