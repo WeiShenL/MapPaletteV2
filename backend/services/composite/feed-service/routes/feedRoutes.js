@@ -1,19 +1,21 @@
 const express = require('express');
 const router = express.Router();
-
-// change the feedcontroller here ya...
 const feedController = require('../controllers/feedController');
+const { verifyAuth, optionalAuth } = require('../../../shared/middleware/auth');
+const { validate, userIdSchema, postIdSchema, paginationSchema } = require('../../../shared/middleware/validator');
+const { lenientLimiter } = require('../../../shared/middleware/rateLimiter');
+const { asyncHandler } = require('../../../shared/middleware/errorHandler');
 
-// Get user's personalized feed
-router.get('/user/:userId', feedController.getUserFeed);
+// Get user's personalized feed (lenient rate limit, requires auth)
+router.get('/user/:userId', lenientLimiter, verifyAuth, validate({ params: { userId: userIdSchema.shape.userId }, query: paginationSchema }), asyncHandler(feedController.getUserFeed));
 
-// Get all posts (discovery/explore)
-router.get('/all', feedController.getAllPosts);
+// Get all posts (discovery/explore) - lenient rate limit
+router.get('/all', lenientLimiter, optionalAuth, validate({ query: paginationSchema }), asyncHandler(feedController.getAllPosts));
 
-// Get single post with full details
-router.get('/post/:postId', feedController.getPostDetails);
+// Get single post with full details - lenient rate limit
+router.get('/post/:postId', lenientLimiter, optionalAuth, validate({ params: { postId: postIdSchema.shape.postId } }), asyncHandler(feedController.getPostDetails));
 
-// Get trending posts
-router.get('/trending', feedController.getTrendingPosts);
+// Get trending posts - lenient rate limit
+router.get('/trending', lenientLimiter, optionalAuth, validate({ query: paginationSchema }), asyncHandler(feedController.getTrendingPosts));
 
 module.exports = router;

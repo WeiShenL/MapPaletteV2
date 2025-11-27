@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from '@/lib/axios';
 
 const USER_DISCOVERY_SERVICE_URL = import.meta.env.VITE_USER_DISCOVERY_SERVICE_URL || 'http://localhost:3010';
 

@@ -1,0 +1,37 @@
+<h1 class="email-title">New Comment on Your Route 💬</h1>
+
+<p class="email-text">
+  Hi {{username}},
+</p>
+
+<p class="email-text">
+  <strong>{{commenterUsername}}</strong> commented on your route "<strong>{{routeName}}</strong>".
+</p>
+
+<div class="email-highlight">
+  <p style="margin: 0; font-style: italic; color: #555555;">
+    "{{commentContent}}"
+  </p>
+  <p style="margin: 10px 0 0 0; font-size: 14px; color: #777777;">
+    — {{commenterUsername}}
+  </p>
+</div>
+
+<div style="text-align: center;">
+  <a href="{{appUrl}}/routes/{{routeId}}" class="email-button">View Route & Reply</a>
+</div>
+
+<p class="email-text">
+  Join the conversation and connect with fellow explorers!
+</p>
+
+<p class="email-text">
+  Best regards,<br>
+  <strong>The MapPalette Team</strong>
+</p>
+
+<div class="email-divider"></div>
+
+<p class="email-text" style="font-size: 13px; color: #999999;">
+  <a href="{{appUrl}}/settings/notifications" style="color: #667eea;">Manage notification preferences</a>
+</p>

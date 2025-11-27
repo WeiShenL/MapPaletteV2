@@ -162,8 +162,9 @@
 </template>
 
 <script>
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '@/config/firebase';
+// TODO: Migrate to Supabase Storage
+// import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+// import { storage } from '@/config/firebase';
 import axios from 'axios';
 import { getCurrentUser, getToken } from '@/services/authService';
 import NavBar from '@/components/layout/NavBar.vue';
@@ -299,9 +300,10 @@ export default {
           const filePath = pathParts.slice(4).join('/').replace(/%2F/g, '/');
           
           if (filePath) {
-            const oldFileRef = storageRef(storage, filePath);
-            await deleteObject(oldFileRef);
-            console.log('Old profile picture deleted successfully');
+            // TODO: Migrate to Supabase Storage
+            // const oldFileRef = storageRef(storage, filePath);
+            // await deleteObject(oldFileRef);
+            console.log('Old profile picture deletion - TODO: migrate to Supabase Storage');
           }
         }
       } catch (error) {
@@ -314,15 +316,26 @@ export default {
       if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
         const userId = this.currentUserId;
         const username = this.userProfile.username;
-        const fileRef = storageRef(storage, `profile_pictures/${userId}/${username}.${file.type.split('/')[1]}`);
-        
+        // TODO: Migrate to Supabase Storage
+        // const fileRef = storageRef(storage, `profile_pictures/${userId}/${username}.${file.type.split('/')[1]}`);
+
         try {
           // Store the old image URL before updating
           const oldImageUrl = this.userProfile.avatar;
-          
-          // Upload the new image
-          await uploadBytes(fileRef, file);
-          const imageUrl = await getDownloadURL(fileRef);
+
+          // TODO: Temporary - use FormData to upload via backend API
+          const formData = new FormData();
+          formData.append('profilePicture', file);
+
+          const token = await getToken();
+          const response = await axios.post(`${import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001'}/api/users/${userId}/profile-picture`, formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+              'Authorization': `Bearer ${token}`
+            }
+          });
+
+          const imageUrl = response.data.profilePictureUrl || response.data.url;
           
           // Update the profile picture in the database
           await this.updateUserProfilePicture(imageUrl);

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from '@/lib/axios';
 
 const API_BASE_URL = import.meta.env.VITE_EXPLORE_ROUTES_URL || 'http://localhost:3008';
 

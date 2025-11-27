@@ -246,13 +246,13 @@ import { useRouter, useRoute } from 'vue-router'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { userProfile } from '@/services/authService'
-import { auth } from '@/config/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import html2canvas from 'html2canvas'
-import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
+// TODO: Migrate to Supabase Storage
+// import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
 import * as bootstrap from 'bootstrap'
 
 export default {
@@ -777,11 +777,14 @@ export default {
         })
         
         const imageData = canvas.toDataURL("image/png")
-        
-        // Upload the captured image to Firebase
-        const imageRef = storageRef(storage.value, `maps_created/${postId}.png`)
-        await uploadString(imageRef, imageData, 'data_url')
-        image.value = await getDownloadURL(imageRef)
+
+        // TODO: Migrate to Supabase Storage - for now, use backend API
+        // const imageRef = storageRef(storage.value, `maps_created/${postId}.png`)
+        // await uploadString(imageRef, imageData, 'data_url')
+        // image.value = await getDownloadURL(imageRef)
+
+        // Temporary: Store image data for backend upload
+        image.value = imageData
         
         // Reset the map container to its original dimensions
         mapContainer.style.height = originalHeight
@@ -1253,19 +1256,20 @@ export default {
     window.initMap = initMap
     
     onMounted(async () => {
-      // Initialize Firebase Storage
-      storage.value = getStorage()
-      
-      // Check authentication state
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          userID.value = user.uid
-          username.value = user.email || ''
-          
-          // Update userProfile if available
-          if (userProfile.value) {
-            username.value = userProfile.value.username || user.email || ''
-          }
+      // TODO: Initialize Supabase Storage
+      // storage.value = getStorage()
+
+      // Check authentication state using Supabase
+      const { currentUser } = useAuth()
+
+      if (currentUser.value) {
+        userID.value = currentUser.value.id
+        username.value = currentUser.value.email || ''
+
+        // Update userProfile if available
+        if (userProfile.value) {
+          username.value = userProfile.value.username || currentUser.value.email || ''
+        }
           
           // Check if editing existing post
           postId.value = route.query.id || null
@@ -1281,11 +1285,10 @@ export default {
               await fetchMapData()
             }, 1000)
           }
-        } else {
-          // Redirect to login if not authenticated
-          router.push('/login')
-        }
-      })
+      } else {
+        // Redirect to login if not authenticated
+        router.push('/login')
+      }
     })
     
     return {

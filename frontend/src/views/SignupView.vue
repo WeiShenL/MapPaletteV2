@@ -146,12 +146,11 @@
 <script>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuth } from '@/composables/useAuth'
 import TermsModal from '@/components/auth/TermsModal.vue'
 import PrivacyModal from '@/components/auth/PrivacyModal.vue'
 const mappaletteLogo = '/resources/images/index/mappalettelogo.png'
 const signupVideo = '/resources/videos/signup-video.mp4'
-import { auth } from '@/config/firebase'
-import { signInWithEmailAndPassword } from 'firebase/auth'
 import axios from 'axios'
 
 export default {
@@ -162,6 +161,7 @@ export default {
   },
   setup() {
     const router = useRouter()
+    const { login } = useAuth()
     const profileInput = ref(null)
     const profilePreview = ref(null)
     const profileFile = ref(null)
@@ -371,13 +371,16 @@ export default {
           }
         }
 
-        // Since the backend creates both Auth and Firestore user, just sign in
+        // Since the backend creates both Auth and database user, just sign in
         try {
-          await signInWithEmailAndPassword(auth, formData.value.email, formData.value.password)
+          const loginResult = await login(formData.value.email, formData.value.password)
+          if (!loginResult.success) {
+            throw new Error(loginResult.error)
+          }
           console.log('User signed in successfully after account creation')
         } catch (signInError) {
           console.error('Failed to sign in after account creation:', signInError)
-          // Account was created but sign in failed - this wont happen but handle gracefully
+          // Account was created but sign in failed - handle gracefully
           showAlertMessage('warning', 'Account created successfully! Please try logging in.')
         }
 
