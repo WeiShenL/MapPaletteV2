@@ -252,6 +252,7 @@ import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import html2canvas from 'html2canvas'
 import { uploadBase64Image, BUCKETS } from '@/lib/storage'
+import { captureMap } from '@/utils/mapCapture'
 import * as bootstrap from 'bootstrap'
 
 export default {
@@ -716,97 +717,32 @@ export default {
       setAlert('success', 'Post cleared successfully.')
     }
     
-    // Capture map as image and upload to Firebase Storage
+    // Capture map as image and upload to Supabase Storage
+    // Uses improved capture methods that keep waypoint markers visible
     const captureMapAsImage = async (postId) => {
-      let originalControls
-      
       try {
-        // Hide markers temporarily for a clean capture
-        markers.value.forEach(marker => marker.setVisible(false))
-        
-        const mapContainer = document.getElementById("map")
-        
-        // Save original dimensions
-        const originalHeight = mapContainer.style.height
-        const originalWidth = mapContainer.style.width
-        
-        // Set dimensions to optimize for homepage display (300px height with object-fit: cover)
-        // Use a fixed 600x300 size for consistent, crisp images on homepage
-        const targetWidth = 686
-        const targetHeight = 506
-        
-        // Set the map to fixed dimensions for consistent homepage display
-        mapContainer.style.width = `${targetWidth}px`
-        mapContainer.style.height = `${targetHeight}px`
-        
-        // Define bounds based on waypoints
-        const bounds = new google.maps.LatLngBounds()
-        waypoints.value.forEach(point => bounds.extend(new google.maps.LatLng(point.location.lat, point.location.lng)))
-        
-        // Apply bounds with extra padding
-        map.value.fitBounds(bounds, { top: 80, right: 80, bottom: 80, left: 80 })
-        
-        // Temporarily disable controls and store original settings
-        originalControls = {
-          zoomControl: map.value.get('zoomControl'),
-          fullscreenControl: map.value.get('fullscreenControl'),
-          streetViewControl: map.value.get('streetViewControl'),
-          mapTypeControl: map.value.get('mapTypeControl')
-        }
-        map.value.setOptions({
-          zoomControl: false,
-          fullscreenControl: false,
-          streetViewControl: false,
-          mapTypeControl: false
-        })
-        
-        // Allow the map to adjust before capture
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Adjust zoom level if necessary
-        const currentZoom = map.value.getZoom()
-        map.value.setZoom(currentZoom - 1)
-        await new Promise(resolve => setTimeout(resolve, 300))
-        
-        // Capture the map view as an image with html2canvas
-        const canvas = await html2canvas(mapContainer, {
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff"
+        console.log('📸 Capturing map with visible markers...')
+
+        // Use the new captureMap utility which automatically tries:
+        // 1. Google Static Maps API (best quality, automatic markers)
+        // 2. Falls back to improved html2canvas (keeps markers visible)
+        const imageUrl = await captureMap({
+          waypoints: waypoints.value,
+          color: currentColor.value,
+          apiKey: mapsApiKey.value,
+          userId: userID.value,
+          postId,
+          map: map.value,
+          markers: markers.value
         })
 
-        const imageData = canvas.toDataURL("image/jpeg", 0.9) // Use JPEG with 90% quality for smaller size
+        image.value = imageUrl
+        console.log('✅ Map captured successfully with markers visible')
 
-        // Upload to Supabase Storage
-        const uploadResult = await uploadBase64Image(
-          imageData,
-          userID.value,
-          BUCKETS.ROUTE_IMAGES,
-          `route_${postId}.jpg`
-        )
-
-        if (uploadResult.success) {
-          image.value = uploadResult.url
-        } else {
-          console.error('Failed to upload route image:', uploadResult.error)
-          // Fallback to base64 if upload fails
-          image.value = imageData
-        }
-        
-        // Reset the map container to its original dimensions
-        mapContainer.style.height = originalHeight
-        mapContainer.style.width = originalWidth
-        
       } catch (error) {
-        console.error("Error capturing map as image:", error)
-      } finally {
-        // Restore original controls
-        if (originalControls) {
-          map.value.setOptions(originalControls)
-        }
-        
-        // Show markers again after capture
-        markers.value.forEach(marker => marker.setVisible(true))
+        console.error('❌ Error capturing map:', error)
+        setAlert('error', 'Failed to capture map image. Please try again.')
+        throw error
       }
     }
     
