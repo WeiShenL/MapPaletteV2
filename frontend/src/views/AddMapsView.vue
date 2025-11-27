@@ -251,8 +251,7 @@ import axios from 'axios'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import html2canvas from 'html2canvas'
-// TODO: Migrate to Supabase Storage
-// import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
+import { uploadBase64Image, BUCKETS } from '@/lib/storage'
 import * as bootstrap from 'bootstrap'
 
 export default {
@@ -775,16 +774,24 @@ export default {
           allowTaint: false,
           backgroundColor: "#ffffff"
         })
-        
-        const imageData = canvas.toDataURL("image/png")
 
-        // TODO: Migrate to Supabase Storage - for now, use backend API
-        // const imageRef = storageRef(storage.value, `maps_created/${postId}.png`)
-        // await uploadString(imageRef, imageData, 'data_url')
-        // image.value = await getDownloadURL(imageRef)
+        const imageData = canvas.toDataURL("image/jpeg", 0.9) // Use JPEG with 90% quality for smaller size
 
-        // Temporary: Store image data for backend upload
-        image.value = imageData
+        // Upload to Supabase Storage
+        const uploadResult = await uploadBase64Image(
+          imageData,
+          userID.value,
+          BUCKETS.ROUTE_IMAGES,
+          `route_${postId}.jpg`
+        )
+
+        if (uploadResult.success) {
+          image.value = uploadResult.url
+        } else {
+          console.error('Failed to upload route image:', uploadResult.error)
+          // Fallback to base64 if upload fails
+          image.value = imageData
+        }
         
         // Reset the map container to its original dimensions
         mapContainer.style.height = originalHeight

@@ -162,11 +162,9 @@
 </template>
 
 <script>
-// TODO: Migrate to Supabase Storage
-// import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-// import { storage } from '@/config/firebase';
 import axios from 'axios';
 import { getCurrentUser, getToken } from '@/services/authService';
+import { uploadProfilePicture, deleteOldProfilePicture as deleteFromStorage } from '@/lib/storage';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 
@@ -288,23 +286,10 @@ export default {
 
     async deleteOldProfilePicture(oldImageUrl) {
       try {
-        // Only delete if it's not the default profile picture and is a Firebase Storage URL
-        if (oldImageUrl && 
-            oldImageUrl !== '/resources/default-profile.png' && 
-            oldImageUrl.includes('storage.googleapis.com')) {
-          
-          // Extract the file path from the URL
-          const url = new URL(oldImageUrl);
-          const pathParts = url.pathname.split('/');
-
-          const filePath = pathParts.slice(4).join('/').replace(/%2F/g, '/');
-          
-          if (filePath) {
-            // TODO: Migrate to Supabase Storage
-            // const oldFileRef = storageRef(storage, filePath);
-            // await deleteObject(oldFileRef);
-            console.log('Old profile picture deletion - TODO: migrate to Supabase Storage');
-          }
+        // Delete from Supabase Storage using the utility function
+        const result = await deleteFromStorage(oldImageUrl);
+        if (!result.success) {
+          console.warn('Could not delete old profile picture:', result.error);
         }
       } catch (error) {
         console.error('Error deleting old profile picture:', error);
@@ -313,57 +298,46 @@ export default {
 
     async handleImageUpload(event) {
       const file = event.target.files[0];
-      if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
-        const userId = this.currentUserId;
-        const username = this.userProfile.username;
-        // TODO: Migrate to Supabase Storage
-        // const fileRef = storageRef(storage, `profile_pictures/${userId}/${username}.${file.type.split('/')[1]}`);
+      if (!file) return;
 
-        try {
-          // Store the old image URL before updating
-          const oldImageUrl = this.userProfile.avatar;
+      try {
+        // Store the old image URL before updating
+        const oldImageUrl = this.userProfile.avatar;
 
-          // TODO: Temporary - use FormData to upload via backend API
-          const formData = new FormData();
-          formData.append('profilePicture', file);
+        // Upload to Supabase Storage
+        const uploadResult = await uploadProfilePicture(file, this.currentUserId);
 
-          const token = await getToken();
-          const response = await axios.post(`${import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001'}/api/users/${userId}/profile-picture`, formData, {
-            headers: {
-              'Content-Type': 'multipart/form-data',
-              'Authorization': `Bearer ${token}`
-            }
-          });
-
-          const imageUrl = response.data.profilePictureUrl || response.data.url;
-          
-          // Update the profile picture in the database
-          await this.updateUserProfilePicture(imageUrl);
-          
-          // Update local state
-          this.userProfile.avatar = imageUrl;
-          
-          // Delete the old image from storage (if it exists and is not default)
-          await this.deleteOldProfilePicture(oldImageUrl);
-          
-          this.photoAlert.type = 'success';
-          this.photoAlert.message = 'Profile picture updated successfully!';
-          this.photoAlert.show = true;
-          setTimeout(() => {
-            this.photoAlert.show = false;
-          }, 3000);
-        } catch (error) {
-          console.error('Error updating profile picture:', error);
+        if (!uploadResult.success) {
           this.photoAlert.type = 'danger';
-          this.photoAlert.message = 'An error occurred while updating the profile picture.';
+          this.photoAlert.message = uploadResult.error || 'Failed to upload image';
           this.photoAlert.show = true;
           setTimeout(() => {
             this.photoAlert.show = false;
           }, 3000);
+          return;
         }
-      } else {
+
+        const imageUrl = uploadResult.url;
+
+        // Update the profile picture URL in the database
+        await this.updateUserProfilePicture(imageUrl);
+
+        // Update local state
+        this.userProfile.avatar = imageUrl;
+
+        // Delete the old image from storage (if it exists and is not default)
+        await this.deleteOldProfilePicture(oldImageUrl);
+
+        this.photoAlert.type = 'success';
+        this.photoAlert.message = 'Profile picture updated successfully!';
+        this.photoAlert.show = true;
+        setTimeout(() => {
+          this.photoAlert.show = false;
+        }, 3000);
+      } catch (error) {
+        console.error('Error updating profile picture:', error);
         this.photoAlert.type = 'danger';
-        this.photoAlert.message = 'Please select a valid image file (JPEG/PNG).';
+        this.photoAlert.message = 'An error occurred while updating the profile picture.';
         this.photoAlert.show = true;
         setTimeout(() => {
           this.photoAlert.show = false;
