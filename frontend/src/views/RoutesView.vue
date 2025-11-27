@@ -161,13 +161,10 @@
               </div>
             </div>
 
-            <!-- Modals -->
-            <RouteModals :routes="filteredRoutes" @alert="handleAlert" />
-
             <!-- Cards -->
             <div class="row mt-4" :style="{ opacity: isFilterLoading ? 0.6 : 1 }">
               <template v-if="filteredRoutes.length > 0">
-                <RouteCards :routes="filteredRoutes" />
+                <RouteCards :routes="filteredRoutes" @open-modal="openRouteModal" />
               </template>
               <template v-else-if="!isFilterLoading">
                 <div class="text-center mt-4">
@@ -184,6 +181,17 @@
           </div>
         </div>
       </div>
+
+      <!-- Post Detail Modal -->
+      <PostDetailModal
+        v-if="selectedRoute"
+        :post="selectedRoute"
+        :current-user="currentUser"
+        @close="selectedRoute = null"
+        @like="handleRouteLike"
+        @share="handleRouteShare"
+        @alert="handleAlert"
+      />
 
       <!-- Back to Top Button -->
       <BackToTop />
@@ -202,9 +210,10 @@ import BackToTop from '@/components/common/BackToTop.vue';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import RouteCards from '@/components/routes/RouteCards.vue';
-import RouteModals from '@/components/routes/RouteModals.vue';
+import PostDetailModal from '@/components/common/PostDetailModal.vue';
 import { useAuth } from '@/composables/useAuth';
 import { routesService } from '@/services/routesService';
+import socialInteractionService from '@/services/socialInteractionService';
 
 export default {
   name: 'RoutesView',
@@ -214,7 +223,7 @@ export default {
     NavBar,
     SiteFooter,
     RouteCards,
-    RouteModals
+    PostDetailModal
   },
   setup() {
     const router = useRouter();
@@ -223,6 +232,7 @@ export default {
     const isInitialLoad = ref(true);
     const isFilterLoading = ref(false);
     const filteredRoutes = ref([]);
+    const selectedRoute = ref(null);
     const currentPage = ref(1);
     const totalPages = ref(1);
     const hasMore = ref(false);
@@ -358,6 +368,44 @@ export default {
       setAlert(type, message);
     };
 
+    const openRouteModal = (route) => {
+      selectedRoute.value = route;
+    };
+
+    const handleRouteLike = async (route) => {
+      try {
+        const userId = currentUser.value?.id;
+        if (!userId) {
+          setAlert('error', 'Please login to like posts');
+          return;
+        }
+
+        if (route.isLiked) {
+          await socialInteractionService.unlikePost(route.id, userId);
+          route.isLiked = false;
+          route.likeCount = Math.max(0, (route.likeCount || 0) - 1);
+        } else {
+          await socialInteractionService.likePost(route.id, userId);
+          route.isLiked = true;
+          route.likeCount = (route.likeCount || 0) + 1;
+        }
+
+        // Update in the routes list
+        const routeIndex = filteredRoutes.value.findIndex(r => r.id === route.id || r.postID === route.id);
+        if (routeIndex !== -1) {
+          filteredRoutes.value[routeIndex].isLiked = route.isLiked;
+          filteredRoutes.value[routeIndex].likeCount = route.likeCount;
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        setAlert('error', 'Failed to update like status');
+      }
+    };
+
+    const handleRouteShare = (route) => {
+      setAlert('success', 'Link copied to clipboard!');
+    };
+
     let handleUserLoaded;
 
     onMounted(() => {
@@ -436,6 +484,8 @@ export default {
       isLoading,
       isFilterLoading,
       filteredRoutes,
+      selectedRoute,
+      currentUser,
       hasMore,
       searchQuery,
       searchInput,
@@ -452,7 +502,10 @@ export default {
       clearSearch,
       loadMoreRoutes,
       dismissAlert,
-      handleAlert
+      handleAlert,
+      openRouteModal,
+      handleRouteLike,
+      handleRouteShare
     };
   }
 };

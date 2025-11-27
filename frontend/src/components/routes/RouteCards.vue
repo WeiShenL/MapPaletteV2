@@ -1,6 +1,6 @@
 <template>
-  <div class="col-md-6 mb-4" v-for="route in routes" :key="route.postID">
-    <div class="card post-card h-100" @click="openModal(route)">
+  <div class="col-md-6 mb-4" v-for="route in routes" :key="route.postID || route.id">
+    <div class="card post-card h-100" @click="$emit('open-modal', route)">
       <div class="row g-0 h-100">
         <!-- Image Column -->
         <div class="col-12 col-md-4">
@@ -31,28 +31,17 @@
   </div>
 </template>
 
-<script>
-import { Modal } from 'bootstrap';
+<script setup>
+import { normalizePost } from '@/utils/postNormalizer'
 
-export default {
-  name: 'RouteCards',
-  props: {
-    routes: {
-      type: Array,
-      required: true
-    }
-  },
-  methods: {
-    openModal(route) {
-      const modalElement = new Modal(document.getElementById(route.modalId));
-      modalElement.show();
-    },
-    truncateText(text, wordLimit) {
-      const words = text.split(" ");
-      return words.length > wordLimit ? words.slice(0, wordLimit).join(" ") + "..." : text;
-    }
+defineProps({
+  routes: {
+    type: Array,
+    required: true
   }
-};
+})
+
+defineEmits(['open-modal'])
 </script>
 
 <style scoped>
