@@ -251,14 +251,16 @@
                       </div>
                   </div>
 
-                  <!-- Updated modal component -->
-                  <comment-modal
+                  <!-- Post Detail Modal -->
+                  <post-detail-modal
                       v-if="selectedActivity"
-                      :activity="selectedActivity"
+                      :post="selectedActivity"
+                      :current-user="currentUser"
                       @close="selectedActivity = null"
                       @like="likeActivity"
-                      @share="handleActivityShare" 
-                  ></comment-modal>
+                      @share="handleActivityShare"
+                      @alert="setAlert"
+                  ></post-detail-modal>
               </div>
           </div>
       </div>
@@ -280,7 +282,7 @@ import axios from 'axios'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
-import CommentModal from '@/components/homepage/CommentModal.vue'
+import PostDetailModal from '@/components/common/PostDetailModal.vue'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
 import { userDiscoveryService } from '@/services/userDiscoveryService.js'
@@ -291,7 +293,7 @@ export default {
     NavBar,
     SiteFooter,
     ActivityCard,
-    CommentModal
+    PostDetailModal
   },
   setup() {
     // State

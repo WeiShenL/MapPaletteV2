@@ -96,41 +96,16 @@
     <!-- Footer -->
     <footer>
       <div class="actions">
-        <div class="d-flex justify-content-around border-top border-bottom py-3">
-          <button
-            class="btn btn-link p-0 action-button"
-            @click.stop="likePost"
-            :class="{ 'liked': activity.isLiked }"
-            data-action="like"
-          >
-            <i :class="[activity.isLiked ? 'fas' : 'far', 'fa-thumbs-up']"></i>
-            <span>{{ activity.isLiked ? 'Liked' : 'Like' }}</span>
-          </button>
-          <button
-            class="btn btn-link p-0 action-button"
-            @click.stop="$emit('open-modal', activity)"
-            data-action="comment"
-          >
-            <i class="far fa-comment"></i>
-            <span>Comment</span>
-          </button>
-          <button
-            class="btn btn-link p-0 action-button"
-            @click.stop="useRoute"
-            data-action="use"
-          >
-            <i class="far fa-map"></i>
-            <span>Use</span>
-          </button>
-          <button
-            class="btn btn-link p-0 action-button"
-            @click.stop="handleShare"
-            data-action="share"
-          >
-            <i class="far fa-share-square"></i>
-            <span>Share</span>
-          </button>
-        </div>
+        <PostActions
+          :post="normalizedActivity"
+          :show-comment="true"
+          :show-use="true"
+          :show-share="true"
+          @like="likePost"
+          @comment="$emit('open-modal', activity)"
+          @use="useRoute"
+          @share="handleShareResult"
+        />
       </div>
     </footer>
   </article>
@@ -138,6 +113,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import { normalizePost } from '@/utils/postNormalizer'
+import PostActions from '@/components/common/PostActions.vue'
 
 // Props
 const props = defineProps({
@@ -153,6 +130,22 @@ const props = defineProps({
 
 // Emits
 const emit = defineEmits(['like', 'open-modal', 'show-share-alert', 'share'])
+
+// Normalize activity data to canonical format
+const normalizedActivity = computed(() => {
+  // Create a normalized post object from activity
+  const normalized = normalizePost({
+    ...props.activity,
+    // Map activity-specific properties
+    userId: props.activity.userID || props.activity.userId,
+    likeCount: props.activity.likes || props.activity.likeCount || 0,
+    commentCount: props.activity.commentsList?.length || props.activity.commentCount || 0,
+    shareCount: props.activity.shares || props.activity.shareCount || 0,
+    imageUrl: props.activity.mapImg || props.activity.imageUrl,
+    region: props.activity.location || props.activity.region
+  })
+  return normalized
+})
 
 // Computed properties
 const isOwnPost = computed(() => {
@@ -176,23 +169,13 @@ const useRoute = () => {
   window.location.href = `/create-route?id=${props.activity.id}`
 }
 
-const handleShare = () => {
-  // Generate the share URL
-  const shareUrl = `${window.location.origin}/homepage?id=${props.activity.id}`
-  
-  // Copy the URL to the clipboard
-  navigator.clipboard.writeText(shareUrl)
-    .then(() => {
-      // Emit the share event to parent component
-      emit('share', props.activity)
-      
-      // success alert 
-      emit('show-share-alert', 'success', "Link copied to clipboard!")
-    })
-    .catch(err => {
-      console.error("Failed to copy link: ", err)
-      emit('show-share-alert', 'error', "Failed to copy link to clipboard")
-    })
+const handleShareResult = ({ post, success, url, error }) => {
+  if (success) {
+    emit('share', props.activity)
+    emit('show-share-alert', 'success', "Link copied to clipboard!")
+  } else {
+    emit('show-share-alert', 'error', "Failed to copy link to clipboard")
+  }
 }
 </script>
 

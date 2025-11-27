@@ -195,15 +195,16 @@
           </div>
       </div>
 
-      <!-- Comment Modal -->
-      <CommentModal
+      <!-- Post Detail Modal -->
+      <PostDetailModal
           v-if="selectedActivity"
-          :activity="selectedActivity"
+          :post="selectedActivity"
+          :current-user="currentUserData"
           @close="selectedActivity = null"
           @like="likeActivity"
           @share="handleActivityShare"
           @alert="handleModalAlert">
-      </CommentModal>
+      </PostDetailModal>
 
       <!-- Back to top button -->
       <BackToTop />
@@ -220,7 +221,7 @@ import { useRoute, useRouter } from 'vue-router'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
-import CommentModal from '@/components/homepage/CommentModal.vue'
+import PostDetailModal from '@/components/common/PostDetailModal.vue'
 import BackToTop from '@/components/common/BackToTop.vue'
 import LoadingQuotes from '@/components/common/LoadingQuotes.vue'
 import followService from '@/services/followService.js'
@@ -233,7 +234,7 @@ export default {
     NavBar,
     SiteFooter,
     ActivityCard,
-    CommentModal,
+    PostDetailModal,
     BackToTop,
     LoadingQuotes
   },
