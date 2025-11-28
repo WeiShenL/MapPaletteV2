@@ -14,7 +14,7 @@ services:
 
   supabase-db:
     container_name: mappalette-supabase-db
-    image: supabase/postgres:15.8.1.060
+    image: supabase/postgres:15.8.1.085
     restart: unless-stopped
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'postgres', '-h', 'localhost']
@@ -31,7 +31,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
-      - ./supabase/volumes/db/init:/docker-entrypoint-initdb.d:ro
+      # Mount individual SQL files to run AFTER embedded migrations
+      - ./supabase/volumes/db/init/99-roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
       - supabase-db-data:/var/lib/postgresql/data
     networks:
       - mappalette-network
@@ -162,6 +163,29 @@ services:
       - ./supabase/kong.yml:/usr/local/kong/kong.yml:ro
     networks:
       - mappalette-network
+
+  supabase-studio:
+    container_name: mappalette-supabase-studio
+    image: supabase/studio:latest # Using a pinned version is recommended
+    restart: unless-stopped
+    ports:
+      - "${STUDIO_PORT:-8081}:3000"
+    environment:
+      SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_DB_HOST: supabase-db
+      SUPABASE_DB_PORT: 5432
+      SUPABASE_DB_USER: postgres
+      SUPABASE_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      SUPABASE_DB_NAME: ${POSTGRES_DB}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+    networks:
+      - mappalette-network
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+      supabase-rest:
+        condition: service_started
 
   # ====================
   # REDIS CACHE
@@ -344,7 +368,7 @@ services:
         - VITE_LEADERBOARD_SERVICE_URL=${VITE_LEADERBOARD_SERVICE_URL:-http://localhost:3008}
         - VITE_USER_DISCOVERY_SERVICE_URL=${VITE_USER_DISCOVERY_SERVICE_URL:-http://localhost:3009}
         # Google Maps
-        - VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
+        - VITE_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
         # Application
         - VITE_APP_NAME=MapPalette
         - VITE_APP_URL=${VITE_APP_URL:-http://localhost:3000}

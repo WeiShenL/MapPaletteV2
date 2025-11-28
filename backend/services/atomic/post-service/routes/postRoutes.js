@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
-const { verifyAuth, verifyOwnership, optionalAuth } = require('../../../shared/middleware/auth');
-const { validate, postIdSchema, userIdSchema, paginationSchema, createPostSchema, updatePostSchema } = require('../../../shared/middleware/validator');
-const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('../../../shared/middleware/rateLimiter');
-const { mapGenerationRateLimiter } = require('../../../shared/middleware/mapRateLimiter');
-const { asyncHandler } = require('../../../shared/middleware/errorHandler');
+const { verifyAuth, verifyOwnership, optionalAuth } = require('/app/shared/middleware/auth');
+const { validate, postIdSchema, userIdSchema, paginationSchema, createPostSchema, updatePostSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
+const { mapGenerationRateLimiter } = require('/app/shared/middleware/mapRateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
 // Public routes - Read operations (lenient rate limit)
 router.get('/allposts', lenientLimiter, optionalAuth, validate({ query: paginationSchema }), asyncHandler(postController.getAllPosts));

@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const interactionController = require('../controllers/interactionController');
-const { verifyAuth } = require('../../../shared/middleware/auth');
-const { validate, uuidSchema, commentSchema, paginationSchema } = require('../../../shared/middleware/validator');
-const { moderateLimiter, lenientLimiter, strictLimiter } = require('../../../shared/middleware/rateLimiter');
-const { asyncHandler } = require('../../../shared/middleware/errorHandler');
+const { verifyAuth } = require('/app/shared/middleware/auth');
+const { validate, uuidSchema, commentSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter } = require('/app/shared/middleware/rateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 const { z } = require('zod');
 
 // Entity validation schema

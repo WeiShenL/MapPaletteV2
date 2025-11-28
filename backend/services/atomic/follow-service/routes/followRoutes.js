@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const followController = require('../controllers/followController');
-const { verifyAuth } = require('../../../shared/middleware/auth');
-const { validate, userIdSchema, followSchema, paginationSchema } = require('../../../shared/middleware/validator');
-const { moderateLimiter, lenientLimiter, strictLimiter } = require('../../../shared/middleware/rateLimiter');
-const { asyncHandler } = require('../../../shared/middleware/errorHandler');
+const { verifyAuth } = require('/app/shared/middleware/auth');
+const { validate, userIdSchema, followSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter } = require('/app/shared/middleware/rateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
 // Create follow relationship (moderate rate limit)
 router.post('/follow', moderateLimiter, verifyAuth, validate({ body: followSchema }), asyncHandler(followController.createFollow));

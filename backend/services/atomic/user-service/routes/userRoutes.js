@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const userController = require('../controllers/userController.new');
-const { verifyAuth, verifyOwnership } = require('../../../shared/middleware/auth');
-const { validate, userIdSchema, usernameSchema, paginationSchema } = require('../../../shared/middleware/validator');
-const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('../../../shared/middleware/rateLimiter');
-const { asyncHandler } = require('../../../shared/middleware/errorHandler');
+const userController = require('../controllers/userController');
+const { verifyAuth, verifyOwnership } = require('/app/shared/middleware/auth');
+const { validate, userIdSchema, usernameSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
 // Configure multer
 const storage = multer.memoryStorage();

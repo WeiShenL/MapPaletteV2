@@ -4,23 +4,19 @@
  */
 
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
-const { createClient } = require('redis');
+const { default: RedisStore } = require('rate-limit-redis');
+const Redis = require('ioredis');
 
 /**
  * Create Redis client for rate limiting
  */
 const createRedisClient = () => {
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-  const client = createClient({
-    url: redisUrl,
-    socket: {
-      reconnectStrategy: (retries) => {
-        if (retries > 10) {
-          return new Error('Redis connection failed after 10 retries');
-        }
-        return Math.min(retries * 100, 3000);
-      },
+  const client = new Redis(redisUrl, {
+    maxRetriesPerRequest: 10,
+    retryStrategy: (times) => {
+      const delay = Math.min(times * 100, 3000);
+      return delay;
     },
   });
 
@@ -44,8 +40,7 @@ const createMapGenerationLimiter = () => {
 
   return rateLimit({
     store: new RedisStore({
-      // @ts-expect-error - RedisStore types are incorrect
-      client: redisClient,
+      sendCommand: (...args) => redisClient.call(...args),
       prefix: 'rl:map:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
@@ -107,8 +102,7 @@ const createGlobalMapLimiter = () => {
 
   return rateLimit({
     store: new RedisStore({
-      // @ts-expect-error - RedisStore types are incorrect
-      client: redisClient,
+      sendCommand: (...args) => redisClient.call(...args),
       prefix: 'rl:map:global:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
@@ -158,8 +152,7 @@ const createIPMapLimiter = () => {
 
   return rateLimit({
     store: new RedisStore({
-      // @ts-expect-error - RedisStore types are incorrect
-      client: redisClient,
+      sendCommand: (...args) => redisClient.call(...args),
       prefix: 'rl:map:ip:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour

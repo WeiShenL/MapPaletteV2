@@ -6,10 +6,10 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
 // Import shared middleware and utilities
-const { requestId } = require('../../../shared/middleware/requestId');
-const { httpLogger, logger } = require('../../../shared/utils/logger');
-const { errorHandler, notFoundHandler } = require('../../../shared/middleware/errorHandler');
-const { createSwaggerConfig } = require('../../../shared/utils/swagger');
+const { requestId } = require('/app/shared/middleware/requestId');
+const { httpLogger, logger } = require('/app/shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('/app/shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('/app/shared/utils/swagger');
 
 const feedRoutes = require('../routes/feedRoutes');
 

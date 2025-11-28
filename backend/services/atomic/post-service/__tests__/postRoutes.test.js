@@ -5,8 +5,8 @@
 const request = require('supertest');
 const express = require('express');
 const postRoutes = require('../routes/postRoutes');
-const { cleanupDatabase, createTestUser, createTestPost } = require('../../../shared/tests/helpers/testHelpers');
-const { db } = require('../../../shared/utils/db');
+const { cleanupDatabase, createTestUser, createTestPost } = require('/app/shared/tests/helpers/testHelpers');
+const { db } = require('/app/shared/utils/db');
 
 // Create test app
 const app = express();
