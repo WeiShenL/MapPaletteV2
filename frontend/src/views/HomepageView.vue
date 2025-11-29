@@ -2,26 +2,16 @@
   <div id="app">
     <!-- Navbar -->
     <nav-bar :user-profile="userProfile"></nav-bar>
-    
+
     <!-- Main Content -->
     <div id="app-container">
-      <!-- alert -->
-      <div class="alert alert-dismissible fade" 
-          :class="{'alert-warning': alertType === 'error', 'alert-success': alertType === 'success', 'show': showAlert}"
-          :hidden="hidden" 
-          role="alert">
-          <!-- Icons for Error or Success -->
-          <svg v-if="alertType === 'error'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-              <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
-          </svg>
-          <svg v-if="alertType === 'success'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16">
-              <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-          </svg>
-          <!-- Alert Message -->
-          {{ alertMessage }}
-          <!-- Close Button -->
-          <button type="button" class="btn-close" @click="dismissAlert()"></button>
-      </div>
+      <!-- Alert Notification -->
+      <AlertNotification
+        :show="showAlert"
+        :type="alertType"
+        :message="alertMessage"
+        @update:show="showAlert = $event"
+      />
 
       <div class="main-content-wrapper">
           <!-- Hero Section -->
@@ -283,9 +273,13 @@ import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
 import PostDetailModal from '@/components/common/PostDetailModal.vue'
+import AlertNotification from '@/components/common/AlertNotification.vue'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
 import { userDiscoveryService } from '@/services/userDiscoveryService.js'
+import { normalizePosts } from '@/utils/postNormalizer'
+import { calculateTimeSince } from '@/utils/dateFormatter'
+import { useAlert } from '@/composables/useAlert'
 
 export default {
   name: 'HomepageView',
@@ -293,9 +287,13 @@ export default {
     NavBar,
     SiteFooter,
     ActivityCard,
-    PostDetailModal
+    PostDetailModal,
+    AlertNotification
   },
   setup() {
+    // Composables
+    const { showAlert, alertType, alertMessage, setAlert, dismissAlert } = useAlert()
+
     // State
     const isLoadingActivities = ref(false)
     // Local microservice endpoints
@@ -305,11 +303,6 @@ export default {
     const selectedActivity = ref(null)
     const lastApiCallTime = ref(0)
     const postId = ref(null)
-    const showAlert = ref(false)
-    const alertTimeout = ref(null)
-    const hidden = ref(true)
-    const alertType = ref('')
-    const alertMessage = ref('')
     const suggestedUsers = ref([])
     const suggestedUsersLoaded = ref(false)
     const activities = ref([])
@@ -382,70 +375,6 @@ export default {
           followers: userData.numFollowers || userData.followers?.length || 0   
         }
       }
-    }
-    
-    const dismissAlert = () => {
-      showAlert.value = false
-      setTimeout(() => {
-        hidden.value = true
-        alertMessage.value = ''
-      }, 300)
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value)
-        alertTimeout.value = null
-      }
-    }
-    
-    const setAlert = (type, message) => {
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value)
-        alertTimeout.value = null
-      }
-
-      hidden.value = false
-      alertType.value = type
-      alertMessage.value = message
-
-      setTimeout(() => {
-        showAlert.value = true
-      }, 10)
-
-      alertTimeout.value = setTimeout(() => {
-        dismissAlert()
-        alertTimeout.value = null
-      }, 3000)
-    }
-    
-    const calculateTimeSince = (dateObj) => {
-      if (!dateObj) return 'Just Now'
-
-      let date
-      if (dateObj._seconds) {
-        date = new Date(dateObj._seconds * 1000)
-      } else {
-        date = new Date(dateObj)
-      }
-
-      const currentDate = new Date()
-      const diffInSeconds = Math.floor((currentDate - date) / 1000)
-      const intervals = [
-        { label: 'year', seconds: 31536000 },
-        { label: 'month', seconds: 2592000 },
-        { label: 'day', seconds: 86400 },
-        { label: 'hour', seconds: 3600 },
-        { label: 'minute', seconds: 60 },
-        { label: 'second', seconds: 1 }
-      ]
-
-      for (const interval of intervals) {
-        const count = Math.floor(diffInSeconds / interval.seconds)
-        if (count >= 1) {
-          return count === 1
-            ? `1 ${interval.label} ago`
-            : `${count} ${interval.label}s ago`
-        }
-      }
-      return 'Just Now'
     }
     
     const loadSuggestedUsers = async () => {
@@ -629,30 +558,33 @@ export default {
         console.log(`Total posts fetched: ${allPosts.length}`)
 
         if (allPosts && allPosts.length > 0) {
-          // Map posts to activities format
-          const newActivities = allPosts.map(post => ({
+          // Normalize posts using the normalizer utility
+          const normalizedPosts = normalizePosts(allPosts)
+
+          // Map normalized posts to activities format with additional fields
+          const newActivities = normalizedPosts.map(post => ({
             ...post,
             user: post.username,
             userImg: post.profilePicture || userProfile.value.avatar,
             date: calculateTimeSince(post.createdAt),
-            location: post.waypoints && post.waypoints[0] ? post.waypoints[0].address : '',
+            location: post.waypoints?.[0]?.address || '',
             routeTitle: post.title,
-            distance: post.distance && typeof post.distance === 'string' && post.distance.includes('km') 
-              ? post.distance 
+            distance: post.distance?.includes?.('km')
+              ? post.distance
               : `${post.distance || 0} km`,
-            mapImg: post.image,
+            mapImg: post.imageUrl,
             likes: post.likeCount,
             shares: post.shareCount,
             commentsList: post.commentsList || [],
             userID: post.userId
           }))
-          
+
           if (loadMore) {
             activities.value = [...activities.value, ...newActivities]
           } else {
             activities.value = newActivities
           }
-          
+
           // Update pagination state
           hasMorePosts.value = feedData.pagination?.hasMore || false
           currentOffset.value += allPosts.length
@@ -842,7 +774,6 @@ export default {
       showAlert,
       alertType,
       alertMessage,
-      hidden,
       selectedActivity,
       currentUser,
       currentUserId,
@@ -853,7 +784,6 @@ export default {
       suggestedUsers,
       suggestedUsersLoaded,
       shouldShowSuggestions,
-      dismissAlert,
       setAlert,
       loadSuggestedUsers,
       followUser,

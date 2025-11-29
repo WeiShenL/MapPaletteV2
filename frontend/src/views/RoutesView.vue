@@ -7,30 +7,14 @@
     <div v-show="!isLoading" id="app-container">
       <!-- Navbar -->
       <NavBar :user-profile="userProfile" />
-      
-      <!-- Alert -->
-      <div 
-        class="alert alert-dismissible fade" 
-        :class="{
-          'alert-warning': alertType === 'error', 
-          'alert-success': alertType === 'success', 
-          'show': showAlert
-        }"
-        :hidden="hidden" 
-        role="alert"
-      >
-        <!-- Icons for Error or Success -->
-        <svg v-if="alertType === 'error'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-          <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
-        </svg>
-        <svg v-if="alertType === 'success'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16">
-          <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-        </svg>
-        <!-- Alert Message -->
-        {{ alertMessage }}
-        <!-- Close Button -->
-        <button type="button" class="btn-close" @click="dismissAlert()"></button>
-      </div>
+
+      <!-- Alert Notification -->
+      <AlertNotification
+        :show="showAlert"
+        :type="alertType"
+        :message="alertMessage"
+        @update:show="showAlert = $event"
+      />
 
       <!-- Feed Header -->
       <header class="sample-header">
@@ -211,10 +195,12 @@ import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import RouteCards from '@/components/routes/RouteCards.vue';
 import PostDetailModal from '@/components/common/PostDetailModal.vue';
+import AlertNotification from '@/components/common/AlertNotification.vue';
 import { useAuth } from '@/composables/useAuth';
 import { routesService } from '@/services/routesService';
 import socialInteractionService from '@/services/socialInteractionService';
 import { normalizePosts } from '@/utils/postNormalizer';
+import { useAlert } from '@/composables/useAlert';
 
 export default {
   name: 'RoutesView',
@@ -224,11 +210,17 @@ export default {
     NavBar,
     SiteFooter,
     RouteCards,
-    PostDetailModal
+    PostDetailModal,
+    AlertNotification
   },
   setup() {
     const router = useRouter();
     const { currentUser } = useAuth();
+
+    // Composables
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert();
+
+    // State
     const isLoading = ref(true);
     const isInitialLoad = ref(true);
     const isFilterLoading = ref(false);
@@ -240,11 +232,6 @@ export default {
     const searchQuery = ref('');
     const searchInput = ref(null);
     const userProfile = ref(null);
-    const showAlert = ref(false);
-    const alertTimeout = ref(null);
-    const hidden = ref(true);
-    const alertType = ref('');
-    const alertMessage = ref('');
     const filters = ref({
       sortOption: 'Most Popular'
     });
@@ -336,38 +323,6 @@ export default {
         currentPage.value++;
         fetchRoutes();
       }
-    };
-
-    const dismissAlert = () => {
-      showAlert.value = false;
-      setTimeout(() => {
-        hidden.value = true;
-        alertMessage.value = '';
-      }, 300);
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value);
-        alertTimeout.value = null;
-      }
-    };
-
-    const setAlert = (type, message) => {
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value);
-        alertTimeout.value = null;
-      }
-
-      hidden.value = false;
-      alertType.value = type;
-      alertMessage.value = message;
-
-      setTimeout(() => {
-        showAlert.value = true;
-      }, 10);
-
-      alertTimeout.value = setTimeout(() => {
-        dismissAlert();
-        alertTimeout.value = null;
-      }, 3000);
     };
 
     const handleAlert = ({ type, message }) => {
@@ -498,7 +453,6 @@ export default {
       searchInput,
       userProfile,
       showAlert,
-      hidden,
       alertType,
       alertMessage,
       filters,
@@ -508,7 +462,6 @@ export default {
       resetFilters,
       clearSearch,
       loadMoreRoutes,
-      dismissAlert,
       handleAlert,
       openRouteModal,
       handleRouteLike,

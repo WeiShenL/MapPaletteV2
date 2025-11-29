@@ -209,3 +209,9 @@ export const isYesterday = (date) => {
     dateObj.getMonth() === yesterday.getMonth() &&
     dateObj.getFullYear() === yesterday.getFullYear()
 }
+
+/**
+ * Alias for formatRelativeTime - for backward compatibility
+ * @deprecated Use formatRelativeTime instead
+ */
+export const calculateTimeSince = formatRelativeTime
