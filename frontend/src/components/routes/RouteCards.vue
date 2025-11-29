@@ -4,10 +4,10 @@
       <div class="row g-0 h-100">
         <!-- Image Column -->
         <div class="col-12 col-md-4">
-          <img 
-            :src="route.image" 
-            class="img-fluid w-100" 
-            :alt="route.title" 
+          <img
+            :src="route.imageUrl || route.image"
+            class="img-fluid w-100"
+            :alt="route.title"
             style="object-fit: cover; height: 100%;"
           >
         </div>

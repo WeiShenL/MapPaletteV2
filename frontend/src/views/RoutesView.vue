@@ -164,7 +164,7 @@
             <!-- Cards -->
             <div class="row mt-4" :style="{ opacity: isFilterLoading ? 0.6 : 1 }">
               <template v-if="filteredRoutes.length > 0">
-                <RouteCards :routes="filteredRoutes" @open-modal="openRouteModal" />
+                <RouteCards :routes="normalizedRoutes" @open-modal="openRouteModal" />
               </template>
               <template v-else-if="!isFilterLoading">
                 <div class="text-center mt-4">
@@ -214,6 +214,7 @@ import PostDetailModal from '@/components/common/PostDetailModal.vue';
 import { useAuth } from '@/composables/useAuth';
 import { routesService } from '@/services/routesService';
 import socialInteractionService from '@/services/socialInteractionService';
+import { normalizePosts } from '@/utils/postNormalizer';
 
 export default {
   name: 'RoutesView',
@@ -250,6 +251,11 @@ export default {
 
     const activeFilters = computed(() => {
       return filters.value.sortOption ? [{ key: 'Sort By', value: filters.value.sortOption }] : [];
+    });
+
+    // Normalize routes to ensure consistent property names
+    const normalizedRoutes = computed(() => {
+      return normalizePosts(filteredRoutes.value);
     });
 
     const fetchRoutes = async (resetPage = false) => {
@@ -484,6 +490,7 @@ export default {
       isLoading,
       isFilterLoading,
       filteredRoutes,
+      normalizedRoutes,
       selectedRoute,
       currentUser,
       hasMore,

@@ -46,18 +46,18 @@
     
     <!-- Main Image -->
     <div class="image featured" @click="$emit('open-modal', activity)">
-      <img 
-        :src="activity.mapImg" 
+      <img
+        :src="normalizedActivity.imageUrl"
         alt="Activity Map"
         loading="lazy"
       >
     </div>
-    
+
     <!-- Content -->
     <div class="content">
       <div class="d-flex justify-content-between text-center mb-3">
         <div>
-          <h6 class="mb-0 fw-bold">{{ activity.distance }}</h6>
+          <h6 class="mb-0 fw-bold">{{ normalizedActivity.distance }} km</h6>
           <small class="text-muted">Distance</small>
         </div>
         <div>
@@ -66,29 +66,29 @@
       </div>
       <div class="d-flex justify-content-between align-items-center">
         <div class="flex-grow-1">
-          <p v-if="activity.description" class="mb-0">{{ activity.description }}</p>
+          <p v-if="normalizedActivity.description" class="mb-0">{{ normalizedActivity.description }}</p>
         </div>
         <div class="stats d-flex ms-3">
           <div class="me-3">
             <small class="text-muted">
-              <i class="bi bi-heart"></i> {{ activity.likes || 0 }}
+              <i class="bi bi-heart"></i> {{ normalizedActivity.likeCount }}
             </small>
           </div>
           <div class="me-3">
             <small class="text-muted">
-              <i class="bi bi-chat"></i> {{ commentCount }}
+              <i class="bi bi-chat"></i> {{ normalizedActivity.commentCount }}
             </small>
           </div>
           <div>
             <small class="text-muted">
-              <i class="bi bi-share"></i> {{ activity.shares || 0 }}
+              <i class="bi bi-share"></i> {{ normalizedActivity.shareCount }}
             </small>
           </div>
         </div>
       </div>
       <div class="location me-3">
         <small class="text-muted">
-          <i class="bi bi-geo-alt"></i> {{ activity.location }}
+          <i class="bi bi-geo-alt"></i> {{ normalizedActivity.region }}
         </small>
       </div>
     </div>
