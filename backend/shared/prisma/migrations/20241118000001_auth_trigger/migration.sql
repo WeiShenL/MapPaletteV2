@@ -6,15 +6,18 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
   -- Insert into public.users when a new user is created in auth.users
-  INSERT INTO public.users (id, email, username, "profilePicture", "numFollowers", "numFollowing", points, "createdAt")
+  INSERT INTO public.users (id, email, username, "profilePicture", birthday, gender, "numFollowers", "numFollowing", points, "createdAt", "updatedAt")
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)), -- Use metadata username or email prefix
     COALESCE(NEW.raw_user_meta_data->>'profilePicture', '/resources/default-profile.png'),
+    NEW.raw_user_meta_data->>'birthday', -- Optional birthday from signup metadata
+    NEW.raw_user_meta_data->>'gender',   -- Optional gender from signup metadata
     0,
     0,
     0,
+    NOW(),
     NOW()
   )
   ON CONFLICT (id) DO NOTHING; -- Don't fail if user already exists

@@ -2,11 +2,15 @@ const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
 
 // Create a new user (called after Supabase auth creates the user)
+// NOTE: This is typically not needed as the auth trigger handles user creation
+// This endpoint is kept for manual user creation or profile completion
 const createUser = async (req, res) => {
   const { email, username, profilePicture, birthday, gender, userId } = req.body;
 
-  if (!email || !username || !birthday || !userId) {
-    return res.status(400).json({ message: 'Email, username, birthday, and userId are required.' });
+  // Only email, username, and userId are required
+  // birthday and gender are optional
+  if (!email || !username || !userId) {
+    return res.status(400).json({ message: 'Email, username, and userId are required.' });
   }
 
   console.log(`[CREATE_USER] Creating user: ${username}`);
@@ -24,8 +28,8 @@ const createUser = async (req, res) => {
         email,
         username,
         profilePicture: profilePicture || '/resources/default-profile.png',
-        birthday,
-        gender,
+        birthday: birthday || null, // Optional
+        gender: gender || null,     // Optional
         isProfilePrivate: false,
         isPostPrivate: false,
         numFollowers: 0,

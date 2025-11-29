@@ -13,8 +13,8 @@ model User {
   email           String    @unique
   username        String    @unique
   profilePicture  String    @default("/resources/default-profile.png")
-  birthday        String
-  gender          String
+  birthday        String?   // Optional - can be NULL if not provided during signup
+  gender          String?   // Optional - can be NULL if not provided during signup
   isProfilePrivate Boolean  @default(false)
   isPostPrivate   Boolean   @default(false)
   numFollowers    Int       @default(0)
