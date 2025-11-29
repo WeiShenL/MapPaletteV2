@@ -333,10 +333,10 @@ export default {
           mapsApiKey.value = data.apiKey
         }
         
-        // Dynamically load Google Maps script
+        // Dynamically load Google Maps script with marker library for Advanced Markers
         return new Promise((resolve, reject) => {
           const script = document.createElement('script')
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places`
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places,marker`
           script.async = true
           script.defer = true
           script.onload = resolve
@@ -351,7 +351,10 @@ export default {
     
     // Initialize Google Maps
     const initMap = () => {
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+
       map.value = new google.maps.Map(document.getElementById("map"), {
+        mapId: mapId, // Required for Advanced Markers API (google.maps.Marker deprecated Feb 2024)
         zoom: 18,
         center: { lat: 1.36241, lng: 103.82606 }, // Singapore's coordinates
         mapTypeId: "roadmap",
@@ -469,24 +472,26 @@ export default {
       })
     }
     
-    // Add marker to map
+    // Add marker to map using Advanced Markers API (google.maps.Marker deprecated Feb 2024)
     const addMarker = (latLng) => {
       const markerIndex = waypoints.value.length
 
-      const marker = new google.maps.Marker({
-        map: map.value,
-        position: latLng,
-        animation: google.maps.Animation.DROP,
+      // Create pin element with label
+      const pinBackground = new google.maps.marker.PinElement({
+        background: '#FF6B6B',
+        borderColor: '#FFFFFF',
+        glyphColor: '#FFFFFF',
+        glyph: `${markerIndex}`,
+        scale: 1.2
       })
 
-      setTimeout(() => {
-        marker.setLabel({
-          text: `${markerIndex}`,
-          color: "black",
-          fontSize: "14px",
-          fontWeight: "bold"
-        })
-      }, 300)
+      // Create advanced marker
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: map.value,
+        position: latLng,
+        content: pinBackground.element,
+        title: `Waypoint ${markerIndex}`
+      })
 
       markers.value.push(marker)
     }
@@ -494,29 +499,37 @@ export default {
     // Remove waypoint
     const removeWaypoint = (index) => {
       if (isDeleting.value) return
-      
+
       isDeleting.value = true
-      
+
       waypoints.value[index].isFilling = true
       waypoints.value.splice(index, 1)
-      
+
       const marker = markers.value[index]
       if (marker) {
-        marker.setMap(null)
-        marker.setVisible(false)
+        // Advanced Markers use property assignment instead of methods
+        marker.map = null
       }
-      
+
       markers.value.splice(index, 1)
       calculateAndDisplayRoute()
       updateMarkerLabels()
-      
+
       isDeleting.value = false
     }
     
-    // Update marker labels after removal
+    // Update marker labels after removal (for Advanced Markers)
     const updateMarkerLabels = () => {
       markers.value.forEach((marker, index) => {
-        marker.setLabel(`${index + 1}`)
+        // Recreate pin element with updated label
+        const pinBackground = new google.maps.marker.PinElement({
+          background: '#FF6B6B',
+          borderColor: '#FFFFFF',
+          glyphColor: '#FFFFFF',
+          glyph: `${index + 1}`,
+          scale: 1.2
+        })
+        marker.content = pinBackground.element
       })
     }
     
@@ -582,17 +595,16 @@ export default {
     // Clear map
     const clearMap = (showAlertMessage = true) => {
       for (let marker of markers.value) {
-        marker.setVisible(false)
-        marker.setMap(null)
-        marker.setPosition(null)
+        // Advanced Markers use property assignment
+        marker.map = null
       }
       markers.value = []
-      
+
       waypoints.value = []
       clearRoute()
       const input = document.getElementById("pac-input")
       if (input) input.value = ''
-      
+
       if (showAlertMessage) {
         setAlert('success', 'Route cleared successfully.')
       }
@@ -834,23 +846,24 @@ export default {
       if (marker && marker.bounceInterval) {
         clearInterval(marker.bounceInterval)
         marker.bounceInterval = null
-        marker.setPosition(marker.originalPosition)
+        marker.position = marker.originalPosition
       }
     }
-    
+
     const bounceMarker = (marker) => {
       const bounceHeight = 0.00015
       const bounceSpeed = 300
       let direction = 1
 
-      marker.originalPosition = marker.getPosition()
+      // Advanced Markers use position property directly
+      marker.originalPosition = { lat: marker.position.lat, lng: marker.position.lng }
 
       marker.bounceInterval = setInterval(() => {
-        const position = marker.getPosition()
-        const newLat = position.lat() + (bounceHeight * direction)
+        const position = marker.position
+        const newLat = position.lat + (bounceHeight * direction)
         direction *= -1
 
-        marker.setPosition(new google.maps.LatLng(newLat, position.lng()))
+        marker.position = { lat: newLat, lng: position.lng }
       }, bounceSpeed)
     }
     

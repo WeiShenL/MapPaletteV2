@@ -7,7 +7,7 @@ export function useMap() {
   const loading = ref(false)
   const error = ref(null)
 
-  // Initialize Google Maps
+  // Initialize Google Maps with Advanced Markers support
   const initializeMap = (container, options = {}) => {
     if (!window.google || !window.google.maps) {
       error.value = 'Google Maps API not loaded'
@@ -15,6 +15,7 @@ export function useMap() {
     }
 
     const defaultOptions = {
+      mapId: 'DEMO_MAP_ID', // Required for Advanced Markers API
       center: { lat: 1.3521, lng: 103.8198 }, // Singapore
       zoom: 12,
       mapTypeControl: false,
@@ -33,7 +34,7 @@ export function useMap() {
     }
   }
 
-  // Add marker to map
+  // Add marker to map using Advanced Markers API
   const addMarker = (position, options = {}) => {
     if (!map.value) {
       error.value = 'Map not initialized'
@@ -41,9 +42,19 @@ export function useMap() {
     }
 
     try {
-      const marker = new window.google.maps.Marker({
+      // Create pin element if custom content not provided
+      const content = options.content || new window.google.maps.marker.PinElement({
+        background: options.background || '#FF6B6B',
+        borderColor: options.borderColor || '#FFFFFF',
+        glyphColor: options.glyphColor || '#FFFFFF',
+        scale: options.scale || 1.0
+      }).element
+
+      const marker = new window.google.maps.marker.AdvancedMarkerElement({
         position,
         map: map.value,
+        content,
+        title: options.title,
         ...options
       })
 
@@ -87,9 +98,9 @@ export function useMap() {
     }
   }
 
-  // Clear all markers
+  // Clear all markers (for Advanced Markers)
   const clearMarkers = () => {
-    markers.value.forEach(marker => marker.setMap(null))
+    markers.value.forEach(marker => marker.map = null)
     markers.value = []
   }
 
@@ -105,13 +116,14 @@ export function useMap() {
     clearPolylines()
   }
 
-  // Fit bounds to show all markers
+  // Fit bounds to show all markers (for Advanced Markers)
   const fitBounds = () => {
     if (!map.value || markers.value.length === 0) return
 
     const bounds = new window.google.maps.LatLngBounds()
     markers.value.forEach(marker => {
-      bounds.extend(marker.getPosition())
+      // Advanced Markers use position property directly
+      bounds.extend(marker.position)
     })
 
     map.value.fitBounds(bounds)
