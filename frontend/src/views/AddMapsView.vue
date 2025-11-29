@@ -316,8 +316,15 @@ export default {
     const loadGoogleMapsScript = async () => {
       try {
         // Try to use environment variable first
-        if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your_google_maps_api_key_here') {
-          mapsApiKey.value = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+        const isValidKey = apiKey &&
+          apiKey !== 'your_google_maps_api_key_here' &&
+          apiKey !== 'your-development-google-maps-api-key' &&
+          apiKey !== 'your-google-maps-api-key' &&
+          apiKey !== 'your-production-google-maps-api-key'
+
+        if (isValidKey) {
+          mapsApiKey.value = apiKey
         } else {
           // Fallback to external service
           const response = await fetch('https://app-907670644284.us-central1.run.app/getGoogleMapsApiKey')
