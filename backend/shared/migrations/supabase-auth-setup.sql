@@ -66,11 +66,13 @@ END;
 $$;
 
 -- 2. Create trigger on auth.users
+SET ROLE supabase_auth_admin;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT OR UPDATE ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_new_user();
+RESET ROLE;
 
 -- 3. Create function to handle user deletion
 CREATE OR REPLACE FUNCTION public.handle_user_delete()
@@ -87,11 +89,13 @@ END;
 $$;
 
 -- 4. Create trigger for user deletion
+SET ROLE supabase_auth_admin;
 DROP TRIGGER IF EXISTS on_auth_user_deleted ON auth.users;
 CREATE TRIGGER on_auth_user_deleted
   BEFORE DELETE ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_user_delete();
+RESET ROLE;
 
 -- 5. Grant necessary permissions
 GRANT USAGE ON SCHEMA auth TO postgres, authenticator;

@@ -16,7 +16,7 @@
               <div class="team-carousel-item carousel-item">
                 <img :src="bendanImg" alt="Benjamin Daniel Loh Wayne" class="d-block w-100 person-image">
                 <h3 class="person-name">Benjamin Daniel Loh Wayne</h3>
-                <p class="person-description"><b>The</b> Firebase/Backend Guy</p>
+                <p class="person-description"><b>The</b> Backend Guy</p>
               </div>
               <div class="team-carousel-item carousel-item">
                 <img :src="alvinImg" alt="Koh En Wei, Alvin" class="d-block w-100 person-image">

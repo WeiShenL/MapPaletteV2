@@ -1,22 +1,25 @@
-FROM node:18-alpine
+FROM node:22-alpine
 
 # Install OpenSSL and libc for Prisma
 RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
-# Copy entire backend
-COPY . .
+# Copy entire backend monorepo (needed for npm workspaces)
+COPY backend/package*.json ./
+COPY backend/shared ./shared
+COPY backend/services ./services
 
-# Install shared dependencies and generate Prisma
-WORKDIR /app/shared
-RUN npm install
-RUN npx prisma generate || true
+# Install all workspace dependencies at once
+RUN npm ci
 
-# Install service dependencies
+# Generate Prisma Client
+RUN npx prisma generate --schema=./shared/prisma/schema.prisma
+
+# Set working directory to this specific service
 WORKDIR /app/services/composite/feed-service
-RUN npm install --production
 
 EXPOSE 5000
 
+# npm start will run the script from package.json in current service
 CMD ["npm", "start"]

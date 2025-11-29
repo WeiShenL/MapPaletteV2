@@ -57,7 +57,7 @@ app.use((req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Explore Routes Service running on port ${PORT}`);
   console.log(`Health check: http://localhost:${PORT}/health`);
 });
@@ -65,7 +65,7 @@ app.listen(PORT, () => {
 // Handle graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
-  app.close(() => {
+  server.close(() => {
     console.log('HTTP server closed');
   });
 });

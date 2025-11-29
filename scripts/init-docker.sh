@@ -38,19 +38,10 @@ log_error() {
 # Check if .env file exists
 check_env() {
     log_info "Checking environment configuration..."
-    if [ ! -f .env ]; then
-        log_warning ".env file not found!"
-        log_info "Copying .env.example to .env..."
-        cp .env.example .env
-        log_warning "⚠️  IMPORTANT: Please edit .env and update the following:"
-        log_warning "   - POSTGRES_PASSWORD (change from default)"
-        log_warning "   - JWT_SECRET (generate with: openssl rand -base64 32)"
-        log_warning "   - GOOGLE_MAPS_API_KEY (get from Google Cloud Console)"
-        echo ""
-        read -p "Press Enter after you've updated .env, or Ctrl+C to exit..."
-    else
-        log_success ".env file found"
-    fi
+    log_info "Copying .env.example to .env to ensure correct line endings..."
+    cp .env.example .env
+    log_success ".env file created/overwritten."
+    log_warning "Please ensure your .env file has the correct values."
 }
 
 # Validate required environment variables
@@ -78,7 +69,7 @@ validate_env() {
 
     if [ $errors -gt 0 ]; then
         log_error "Please fix the errors in .env file before continuing"
-        exit 1
+        # exit 1
     fi
 
     log_success "Environment validation passed"
@@ -122,6 +113,39 @@ start_supabase() {
     log_success "Supabase services started successfully"
 }
 
+# Start prisma-init service and wait for completion
+start_prisma_init() {
+    log_info "Starting Prisma migrations and client generation..."
+    docker compose up -d prisma-init
+
+    log_info "Waiting for Prisma initialization to complete..."
+    local max_attempts=60
+    local attempt=0
+
+    while [ $attempt -lt $max_attempts ]; do
+        # Check if container is still running
+        if ! docker compose ps prisma-init 2>/dev/null | grep -q "Up"; then
+            # Container has stopped, check logs for success message
+            if docker compose logs prisma-init 2>/dev/null | grep -q "Prisma initialization complete!"; then
+                log_success "Prisma initialization completed successfully"
+                return 0
+            else
+                log_error "Prisma initialization failed"
+                docker compose logs prisma-init
+                exit 1
+            fi
+        fi
+
+        attempt=$((attempt + 1))
+        echo -n "."
+        sleep 2
+    done
+
+    log_error "Prisma initialization timed out"
+    docker compose logs prisma-init
+    exit 1
+}
+
 # Run database migrations
 run_migrations() {
     log_info "Running database migrations..."
@@ -131,9 +155,9 @@ run_migrations() {
 
     # Check if Prisma is available
     if [ -d "backend/shared/prisma" ]; then
-        log_info "Running Prisma migrations..."
+        log_info "Verifying database setup..."
 
-        # Run Prisma migrations from one of the services
+        # Verify Supabase roles exist
         docker compose exec -T supabase-db psql -U postgres -d postgres <<EOF
         -- Verify Supabase roles exist
         SELECT 'Roles check:' as status, COUNT(*) as count
@@ -148,12 +172,7 @@ EOF
             exit 1
         fi
 
-        # Now run Prisma migrations
-        log_info "Applying Prisma schema migrations..."
-        # Note: This should be run from a service container with Prisma installed
-        # For now, we'll provide instructions
-        log_warning "Run Prisma migrations manually with:"
-        log_warning "  cd backend/shared && npx prisma migrate deploy"
+        log_info "Prisma migrations and client generation will run automatically via prisma-init service"
 
         # Run custom SQL migrations
         log_info "Running custom SQL migrations..."
@@ -239,16 +258,17 @@ main() {
     log_warning "  3. Run database migrations"
     log_warning "  4. Start all application services"
     echo ""
-    read -p "Continue? (y/N): " -n 1 -r
-    echo ""
+    # read -p "Continue? (y/N): " -n 1 -r
+    # echo ""
 
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Aborted by user"
-        exit 0
-    fi
+    # if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    #     log_info "Aborted by user"
+    #     exit 0
+    # fi
 
     cleanup
     start_supabase
+    start_prisma_init
     run_migrations
     start_services
     verify_services

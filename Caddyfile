@@ -64,9 +64,9 @@
     }
   }
 
-  # Post Service (port 5001)
+  # Post Service (port 5000)
   handle /api/posts/* {
-    reverse_proxy post-service:5001 {
+    reverse_proxy post-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -76,9 +76,9 @@
     }
   }
 
-  # Interaction Service (port 5002)
+  # Interaction Service (port 5000)
   handle /api/interactions/* {
-    reverse_proxy interaction-service:5002 {
+    reverse_proxy interaction-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -88,9 +88,9 @@
     }
   }
 
-  # Follow Service (port 5003)
+  # Follow Service (port 5000)
   handle /api/follows/* {
-    reverse_proxy follow-service:5003 {
+    reverse_proxy follow-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -100,9 +100,9 @@
     }
   }
 
-  # Feed Service (port 5004)
+  # Feed Service (port 5000)
   handle /api/feed/* {
-    reverse_proxy feed-service:5004 {
+    reverse_proxy feed-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -199,7 +199,7 @@
 
   # Post Service
   handle /api/posts/* {
-    reverse_proxy post-service:5001 {
+    reverse_proxy post-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -213,7 +213,7 @@
 
   # Interaction Service
   handle /api/interactions/* {
-    reverse_proxy interaction-service:5002 {
+    reverse_proxy interaction-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -227,7 +227,7 @@
 
   # Follow Service
   handle /api/follows/* {
-    reverse_proxy follow-service:5003 {
+    reverse_proxy follow-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}
@@ -241,7 +241,7 @@
 
   # Feed Service
   handle /api/feed/* {
-    reverse_proxy feed-service:5004 {
+    reverse_proxy feed-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
       header_up X-Forwarded-Proto {scheme}

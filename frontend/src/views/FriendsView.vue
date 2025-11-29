@@ -352,7 +352,7 @@ export default {
             username: window.currentUser.username
           };
         } else {
-          // Fallback to Firebase auth
+          // Fallback to Supabase auth
           const user = getCurrentUser();
           if (!user) {
             router.push('/login');
@@ -372,11 +372,11 @@ export default {
                 username: userData.username
               };
             } catch (e) {
-              // Fallback to basic Firebase data
+              // Fallback to basic Supabase data
               userProfile.value = {
                 uid: user.uid,
                 email: user.email,
-                avatar: user.photoURL || defaultProfileImg
+                      avatar: user.user_metadata.avatar_url || defaultProfileImg
               };
             }
           } else {
@@ -384,7 +384,7 @@ export default {
             userProfile.value = {
               uid: user.uid,
               email: user.email,
-              avatar: user.photoURL || defaultProfileImg
+                    avatar: user.user_metadata.avatar_url || defaultProfileImg
             };
           }
         }

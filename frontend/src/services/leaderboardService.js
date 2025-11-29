@@ -1,6 +1,6 @@
 import axios from '@/lib/axios';
 
-const LEADERBOARD_API_URL = import.meta.env.VITE_LEADERBOARD_SERVICE_URL || 'http://localhost:8080';
+const LEADERBOARD_API_URL = import.meta.env.VITE_LEADERBOARD_SERVICE_URL || 'http://localhost:3009';
 
 class LeaderboardService {
   constructor() {

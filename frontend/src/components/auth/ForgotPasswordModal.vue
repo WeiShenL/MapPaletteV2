@@ -36,11 +36,13 @@
 
 <script>
 import { ref } from 'vue'
+import { useAuth } from '@/composables/useAuth'
 
 export default {
   name: 'ForgotPasswordModal',
   emits: ['close'],
   setup(props, { emit }) {
+    const { resetPassword } = useAuth()
     const resetEmail = ref('')
     const showSuccessAlert = ref(false)
     const showErrorAlert = ref(false)
@@ -51,17 +53,19 @@ export default {
       showErrorAlert.value = false
       isResetting.value = true
 
-      // TODO: Firebase password reset logic.. probs dont need?
-      // For now, just simulate success
-      setTimeout(() => {
+      const { success, error } = await resetPassword(resetEmail.value)
+
+      isResetting.value = false
+
+      if (success) {
         showSuccessAlert.value = true
-        isResetting.value = false
-        
-        // Close modal after 3 seconds
         setTimeout(() => {
           emit('close')
         }, 3000)
-      }, 1500)
+      } else {
+        showErrorAlert.value = true
+        console.error('Password reset error:', error)
+      }
     }
 
     return {

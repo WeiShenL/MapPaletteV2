@@ -26,14 +26,7 @@
             <button type="button" class="btn-close" @click="showErrorAlert = false" aria-label="Close"></button>
           </div>
 
-          <!-- Firebase Error Alert -->
-          <div class="alert alert-warning alert-dismissible fade show" role="alert" v-if="showFirebaseError">
-            <strong>Firebase Error:</strong>
-            <ul class="alert-list">
-              <li>{{ firebaseError }}</li>
-            </ul>
-            <button type="button" class="btn-close" @click="showFirebaseError = false" aria-label="Close"></button>
-          </div>
+
 
           <!-- Success Alert -->
           <div class="alert alert-success alert-dismissible fade show" role="alert" v-if="showSuccessAlert">
@@ -151,7 +144,7 @@ import TermsModal from '@/components/auth/TermsModal.vue'
 import PrivacyModal from '@/components/auth/PrivacyModal.vue'
 const mappaletteLogo = '/resources/images/index/mappalettelogo.png'
 const signupVideo = '/resources/videos/signup-video.mp4'
-import axios from 'axios'
+import axios from '@/lib/axios'
 
 export default {
   name: 'SignupView',
@@ -161,14 +154,12 @@ export default {
   },
   setup() {
     const router = useRouter()
-    const { login } = useAuth()
+    const { login, signup } = useAuth()
     const profileInput = ref(null)
     const profilePreview = ref(null)
     const profileFile = ref(null)
     const showErrorAlert = ref(false)
-    const showFirebaseError = ref(false)
     const showSuccessAlert = ref(false)
-    const firebaseError = ref('')
     const errors = ref([])
     const isSubmitting = ref(false)
     const showTosModal = ref(false)
@@ -237,11 +228,9 @@ export default {
       showErrorAlert.value = false
     }
 
-    const showAlertMessage = (type, message) => {
-      if (type === 'warning') {
-        firebaseError.value = message
-        showFirebaseError.value = true
-      }
+    const showAlertMessage = (message) => {
+      errors.value.push(message)
+      showErrorAlert.value = true
     }
 
     const triggerFileInput = () => {
@@ -343,14 +332,27 @@ export default {
       isSubmitting.value = true
 
       try {
-        // Create user in user microservice
+        // 1. Create user in Supabase Auth
+        const { success, user, error } = await signup(
+            formData.value.email,
+            formData.value.password,
+            {
+                username: formData.value.username,
+            }
+        );
+
+        if (!success || !user) {
+            throw new Error(error || 'Could not create user in Supabase.');
+        }
+        
+        // 2. Create user in your user microservice
         const response = await axios.post('/api/users/create', {
-          email: formData.value.email,
-          password: formData.value.password,
-          username: formData.value.username,
-          birthday: formData.value.birthday,
-          gender: formData.value.gender
-        })
+            userId: user.id, // Use the ID from Supabase Auth
+            email: formData.value.email,
+            username: formData.value.username,
+            birthday: formData.value.birthday,
+            gender: formData.value.gender
+        });
 
         const { uid } = response.data
 
@@ -360,7 +362,7 @@ export default {
           formDataImg.append('profilePicture', profileFile.value)
           
           try {
-            const uploadResponse = await axios.post(`/api/users/upload-profile-picture/${uid}`, formDataImg, {
+            const uploadResponse = await axios.post(`/api/users/upload-profile-picture/${user.id}`, formDataImg, {
               headers: {
                 'Content-Type': 'multipart/form-data'
               }
@@ -393,25 +395,23 @@ export default {
         }, 2000)
       } catch (error) {
         isSubmitting.value = false
-        showFirebaseError.value = true
         
+        const errorMap = {
+            'User already registered': 'An account with this email address already exists. Please log in.',
+            'Password should be at least 6 characters': 'Your password is too short. It must be at least 6 characters long.',
+            'To signup, please provide an email and a password.': 'Please provide a valid email and password.',
+            'Username already exists': 'This username is already taken. Please choose a different one.'
+        };
+
+        let rawErrorMessage;
         if (error.response?.data?.message) {
-          firebaseError.value = error.response.data.message
-        } else if (error.code) {
-          // Firebase error codes
-          switch (error.code) {
-            case 'auth/email-already-in-use':
-              firebaseError.value = 'This email is already registered'
-              break
-            case 'auth/weak-password':
-              firebaseError.value = 'Password is too weak'
-              break
-            default:
-              firebaseError.value = 'An error occurred during signup'
-          }
-        } else {
-          firebaseError.value = 'Failed to connect to server'
+            rawErrorMessage = error.response.data.message;
+        } else if (error.message) {
+            rawErrorMessage = error.message;
         }
+
+        const errorMessage = errorMap[rawErrorMessage] || rawErrorMessage || 'An unknown error occurred during signup.';
+        showAlertMessage(errorMessage);
         
         // Scroll to top to show error
         document.querySelector('.signup-container').scrollTo({
@@ -427,9 +427,7 @@ export default {
       profileInput,
       profilePreview,
       showErrorAlert,
-      showFirebaseError,
       showSuccessAlert,
-      firebaseError,
       errors,
       isSubmitting,
       showTosModal,

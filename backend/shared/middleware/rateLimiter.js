@@ -4,12 +4,11 @@
  */
 
 const rateLimit = require('express-rate-limit');
-const RedisStore = require('rate-limit-redis');
+const { default: RedisStore } = require('rate-limit-redis');
 const Redis = require('ioredis');
 
 // Create Redis client for rate limiting
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
-  enableOfflineQueue: false,
   maxRetriesPerRequest: 3,
 });
 
@@ -59,8 +58,8 @@ const createRateLimiter = (options = {}) => {
   // Use Redis store for distributed rate limiting
   try {
     config.store = new RedisStore({
-      client: redis,
-      prefix: 'rl:', // Rate limit key prefix
+      // @ts-expect-error - Known issue: the `call` function is not present in @types/ioredis
+      sendCommand: (...args) => redis.call(...args),
     });
   } catch (error) {
     if (global.logger) {

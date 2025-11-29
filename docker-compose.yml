@@ -92,10 +92,10 @@ services:
 
   supabase-storage:
     container_name: mappalette-supabase-storage
-    image: supabase/storage-api:v1.13.1
+    image: supabase/storage-api:v1.32.0
     restart: unless-stopped
     healthcheck:
-      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost:5000/status']
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://supabase-storage:5000/status']
       timeout: 5s
       interval: 5s
       retries: 3
@@ -166,12 +166,13 @@ services:
 
   supabase-studio:
     container_name: mappalette-supabase-studio
-    image: supabase/studio:latest # Using a pinned version is recommended
+    image: supabase/studio:2025.11.26-sha-8f096b5 # Using a pinned version is recommended
     restart: unless-stopped
     ports:
       - "${STUDIO_PORT:-8081}:3000"
     environment:
       SUPABASE_URL: http://supabase-kong:8000
+      STUDIO_PG_META_URL: http://supabase-meta:8080
       SUPABASE_DB_HOST: supabase-db
       SUPABASE_DB_PORT: 5432
       SUPABASE_DB_USER: postgres
@@ -179,13 +180,46 @@ services:
       SUPABASE_DB_NAME: ${POSTGRES_DB}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
-    networks:
-      - mappalette-network
     depends_on:
       supabase-db:
         condition: service_healthy
       supabase-rest:
         condition: service_started
+      supabase-kong:
+        condition: service_started
+      supabase-meta:
+        condition: service_healthy
+
+  supabase-meta:
+    container_name: mappalette-supabase-meta
+    image: supabase/postgres-meta:v0.93.1
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "try { require('http').get('http://localhost:8080', (res) => res.statusCode === 200 ? process.exit(0) : process.exit(1)) } catch (err) { process.exit(1) }"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      PG_META_PORT: 8080
+      PG_META_DB_HOST: ${POSTGRES_HOST}
+      PG_META_DB_PORT: ${POSTGRES_PORT}
+      PG_META_DB_NAME: ${POSTGRES_DB}
+      PG_META_DB_USER: supabase_admin
+      PG_META_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
+    networks:
+      - mappalette-network
+    ports:
+      - "8082:8080" # Exposing meta for debugging
 
   # ====================
   # REDIS CACHE
@@ -209,16 +243,48 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
 
   # ====================
+  # PRISMA INIT SERVICE
+  # ====================
+  # Runs migrations and generates Prisma client before services start
+
+  prisma-init:
+    build:
+      context: .
+      dockerfile: ./backend/services/atomic/user-service/Dockerfile
+    container_name: mappalette-prisma-init
+    restart: "no"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+    networks:
+      - mappalette-network
+    working_dir: /app
+    command: >
+      sh -c "
+      echo 'Waiting for database migrations...' &&
+      npx prisma migrate deploy --schema=/app/shared/prisma/schema.prisma &&
+      echo 'Generating Prisma client...' &&
+      npx prisma generate --schema=/app/shared/prisma/schema.prisma &&
+      echo 'Prisma initialization complete!'
+      "
+
+  # ====================
   # ATOMIC SERVICES
   # ====================
 
   user-service:
     build:
-      context: ./backend
-      dockerfile: services/atomic/user-service/Dockerfile
+      context: .
+      dockerfile: ./backend/services/atomic/user-service/Dockerfile
     container_name: mappalette-user-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -238,11 +304,13 @@ services:
 
   post-service:
     build:
-      context: ./backend
-      dockerfile: services/atomic/post-service/Dockerfile
+      context: .
+      dockerfile: ./backend/services/atomic/post-service/Dockerfile
     container_name: mappalette-post-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -262,11 +330,13 @@ services:
 
   interaction-service:
     build:
-      context: ./backend/services/atomic/interaction-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backend/services/atomic/interaction-service/Dockerfile
     container_name: mappalette-interaction-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -287,11 +357,13 @@ services:
 
   follow-service:
     build:
-      context: ./backend/services/atomic/follow-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backend/services/atomic/follow-service/Dockerfile
     container_name: mappalette-follow-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -316,15 +388,21 @@ services:
 
   feed-service:
     build:
-      context: ./backend/services/composite/feed-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backend/services/composite/feed-service/Dockerfile
     container_name: mappalette-feed-service
     restart: unless-stopped
     depends_on:
-      - user-service
-      - post-service
-      - interaction-service
-      - follow-service
+      prisma-init:
+        condition: service_completed_successfully
+      user-service:
+        condition: service_started
+      post-service:
+        condition: service_started
+      interaction-service:
+        condition: service_started
+      follow-service:
+        condition: service_started
     ports:
       - "${FEED_SERVICE_PORT:-3004}:5000"
     env_file:
@@ -343,6 +421,148 @@ services:
     volumes:
       - ./backend/shared:/app/shared:ro
 
+  profile-service:
+    build:
+      context: .
+      dockerfile: ./backend/services/composite/profile-service/Dockerfile
+    container_name: mappalette-profile-service
+    restart: unless-stopped
+    depends_on:
+      prisma-init:
+        condition: service_completed_successfully
+      user-service:
+        condition: service_started
+      post-service:
+        condition: service_started
+    ports:
+      - "${PROFILE_SERVICE_PORT:-3006}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user-service:5000
+      - POST_SERVICE_URL=http://post-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  social-interaction-service:
+    build:
+      context: .
+      dockerfile: ./backend/services/composite/social-interaction-service/Dockerfile
+    container_name: mappalette-social-interaction-service
+    restart: unless-stopped
+    depends_on:
+      prisma-init:
+        condition: service_completed_successfully
+      interaction-service:
+        condition: service_started
+      follow-service:
+        condition: service_started
+    ports:
+      - "${SOCIAL_INTERACTION_SERVICE_PORT:-3005}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - INTERACTION_SERVICE_URL=http://interaction-service:5000
+      - FOLLOW_SERVICE_URL=http://follow-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  explore-routes-service:
+    build:
+      context: .
+      dockerfile: ./backend/services/composite/explore-routes-service/Dockerfile
+    container_name: mappalette-explore-routes-service
+    restart: unless-stopped
+    depends_on:
+      prisma-init:
+        condition: service_completed_successfully
+      post-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+    ports:
+      - "${EXPLORE_ROUTES_SERVICE_PORT:-3008}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - POST_SERVICE_URL=http://post-service:5000
+      - USER_SERVICE_URL=http://user-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  leaderboard-service:
+    build:
+      context: ./backend/services/composite/leaderboard-service
+      dockerfile: Dockerfile
+    container_name: mappalette-leaderboard-service
+    restart: unless-stopped
+    depends_on:
+      prisma-init:
+        condition: service_completed_successfully
+      user-service:
+        condition: service_started
+    ports:
+      - "${LEADERBOARD_SERVICE_PORT:-3009}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
+  user-discovery-service:
+    build:
+      context: ./backend/services/composite/user-discovery-service
+      dockerfile: Dockerfile
+    container_name: mappalette-user-discovery-service
+    restart: unless-stopped
+    depends_on:
+      prisma-init:
+        condition: service_completed_successfully
+      user-service:
+        condition: service_started
+      follow-service:
+        condition: service_started
+    ports:
+      - "${USER_DISCOVERY_SERVICE_PORT:-3010}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user-service:5000
+      - FOLLOW_SERVICE_URL=http://follow-service:5000
+    networks:
+      - mappalette-network
+    volumes:
+      - ./backend/shared:/app/shared:ro
+
   # ====================
   # FRONTEND
   # ====================
@@ -355,18 +575,19 @@ services:
         # Supabase
         - VITE_SUPABASE_URL=${SUPABASE_PUBLIC_URL}
         - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-        # API URLs
+        # API URLs - Core Services
         - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
         - VITE_USER_SERVICE_URL=http://user-service:5000
         - VITE_FEED_SERVICE_URL=http://feed-service:5000
         - VITE_POST_SERVICE_URL=http://post-service:5000
         - VITE_INTERACTION_SERVICE_URL=http://interaction-service:5000
         - VITE_FOLLOW_SERVICE_URL=http://follow-service:5000
-        - VITE_PROFILE_SERVICE_URL=${VITE_PROFILE_SERVICE_URL:-http://localhost:3005}
-        - VITE_SOCIAL_INTERACTION_SERVICE_URL=${VITE_SOCIAL_INTERACTION_SERVICE_URL:-http://localhost:3006}
-        - VITE_EXPLORE_ROUTES_SERVICE_URL=${VITE_EXPLORE_ROUTES_SERVICE_URL:-http://localhost:3007}
-        - VITE_LEADERBOARD_SERVICE_URL=${VITE_LEADERBOARD_SERVICE_URL:-http://localhost:3008}
-        - VITE_USER_DISCOVERY_SERVICE_URL=${VITE_USER_DISCOVERY_SERVICE_URL:-http://localhost:3009}
+        # API URLs - Composite Services
+        - VITE_PROFILE_SERVICE_URL=http://profile-service:5000
+        - VITE_SOCIAL_INTERACTION_URL=http://social-interaction-service:5000
+        - VITE_EXPLORE_ROUTES_URL=http://explore-routes-service:5000
+        - VITE_LEADERBOARD_SERVICE_URL=http://leaderboard-service:5000
+        - VITE_USER_DISCOVERY_SERVICE_URL=http://user-discovery-service:5000
         # Google Maps
         - VITE_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
         # Application
@@ -380,11 +601,19 @@ services:
     container_name: mappalette-frontend
     restart: unless-stopped
     depends_on:
+      # Atomic Services
       - user-service
-      - feed-service
       - post-service
       - interaction-service
       - follow-service
+      # Composite Services
+      - feed-service
+      - profile-service
+      - social-interaction-service
+      - explore-routes-service
+      - leaderboard-service
+      - user-discovery-service
+      # Infrastructure
       - supabase-kong
     ports:
       - "${FRONTEND_PORT:-3000}:80"

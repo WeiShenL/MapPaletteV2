@@ -338,6 +338,7 @@ export default {
         })
       } catch (error) {
         console.error('Error fetching API key:', error)
+        setAlert('error', 'Could not load Google Maps API key. Please make sure it is set in your .env file.')
       }
     }
     
@@ -670,7 +671,7 @@ export default {
         const firstWaypoint = waypoints.value[0].location
         region.value = await getTownName(firstWaypoint.lat, firstWaypoint.lng)
 
-        // Capture map as image and upload to Firebase Storage
+        // Capture map as image and upload to Supabase Storage
         const postIdForImage = Date.now()
         await captureMapAsImage(postIdForImage)
 
@@ -978,7 +979,7 @@ export default {
         const firstWaypoint = waypoints.value[0].location
         region.value = await getTownName(firstWaypoint.lat, firstWaypoint.lng)
         
-        // Capture map as image and upload to Firebase Storage
+        // Capture map as image and upload to Supabase Storage
         await captureMapAsImage(postId.value)
         
         const response = await axios.put(`${POST_SERVICE_URL.value}/posts?id=${postId.value}`, {
