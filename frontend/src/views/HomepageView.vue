@@ -139,76 +139,7 @@
                       <!-- New User Tutorial Section (show only if user has no friends/routes) -->
                       <div v-if="!isLoadingActivities">
                           <!-- Welcome & No Activities Section -->
-                          <template v-if="activities.length === 0">
-                              <!-- Welcome Section -->
-                              <div class="mb-4">
-                                  <div class="card shadow-sm">
-                                      <div class="card-body">
-                                          <h3 class="card-title mb-4">👋 Welcome to MapPalette!</h3>
-                                          <p class="card-text">Here's how to get started:</p>
-                                          
-                                          <div class="getting-started-steps">
-                                              <div class="step d-flex align-items-start mb-4">
-                                                  <div class="step-icon me-3">
-                                                      <i class="bi bi-1-circle-fill fs-4 text-primary"></i>
-                                                  </div>
-                                                  <div>
-                                                      <h5>Draw Your First Route</h5>
-                                                      <p>Create your first running route by clicking "Draw Your Map!" in the quick actions menu.</p>
-                                                      <router-link to="/create-route" class="btn btn-primary">
-                                                          <i class="bi bi-map me-2"></i>Start Drawing
-                                                      </router-link>
-                                                  </div>
-                                              </div>
-
-                                              <div class="step d-flex align-items-start mb-4">
-                                                  <div class="step-icon me-3">
-                                                      <i class="bi bi-2-circle-fill fs-4 text-primary"></i>
-                                                  </div>
-                                                  <div>
-                                                      <h5>Connect with Runners</h5>
-                                                      <p>Follow other runners to see their routes and activities in your feed.</p>
-                                                      <router-link to="/friends" class="btn btn-primary">
-                                                          <i class="bi bi-people me-2"></i>Find Runners
-                                                      </router-link>
-                                                  </div>
-                                              </div>
-
-                                              <div class="step d-flex align-items-start">
-                                                  <div class="step-icon me-3">
-                                                      <i class="bi bi-3-circle-fill fs-4 text-primary"></i>
-                                                  </div>
-                                                  <div>
-                                                      <h5>Explore Routes</h5>
-                                                      <p>Discover popular running routes in your area and save them for later.</p>
-                                                      <router-link to="/routes" class="btn btn-primary">
-                                                          <i class="bi bi-compass me-2"></i>Browse Routes
-                                                      </router-link>
-                                                  </div>
-                                              </div>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-
-                              <!-- No Activities Message -->
-                              <div class="text-center py-4">
-                                  <div class="card shadow-sm">
-                                      <div class="card-body">
-                                          <h5 class="mb-3">No Activities Yet</h5>
-                                          <p class="text-muted">Follow other runners to see their activities here, or create your own route to share!</p>
-                                          <div class="mt-3">
-                                              <router-link to="/create-route" class="btn btn-primary me-2">
-                                                  <i class="bi bi-map me-2"></i>Create Route
-                                              </router-link>
-                                              <router-link to="/friends" class="btn btn-outline-primary">
-                                                  <i class="bi bi-people me-2"></i>Find Runners
-                                              </router-link>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                          </template>
+                          <WelcomeTutorial v-if="activities.length === 0" />
 
                           <!-- Activity Cards -->
                           <template v-else>
@@ -274,6 +205,7 @@ import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
 import PostDetailModal from '@/components/common/PostDetailModal.vue'
 import AlertNotification from '@/components/common/AlertNotification.vue'
+import WelcomeTutorial from '@/components/common/WelcomeTutorial.vue'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
 import { userDiscoveryService } from '@/services/userDiscoveryService.js'
@@ -288,7 +220,8 @@ export default {
     SiteFooter,
     ActivityCard,
     PostDetailModal,
-    AlertNotification
+    AlertNotification,
+    WelcomeTutorial
   },
   setup() {
     // Composables
