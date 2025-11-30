@@ -163,7 +163,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
-import axios from 'axios';
+import axios from '@/lib/axios';
 import { useAuth } from '@/composables/useAuth';
 import { useAlert } from '@/composables/useAlert';
 import { uploadProfilePicture, deleteOldProfilePicture as deleteFromStorage } from '@/lib/storage';
@@ -223,11 +223,9 @@ export default {
 
     const updateUsername = async () => {
       try {
-        const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/update/username/${currentUser.value.id}`,
-          { username: userProfile.value.username },
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          `/api/users/update/username/${currentUser.value.id}`,
+          { username: userProfile.value.username }
         );
         setAlert('success', 'Username updated successfully!');
       } catch (error) {
@@ -284,14 +282,12 @@ export default {
     const savePrivacySettings = async () => {
       destroyTooltips();
       try {
-        const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/${currentUser.value.id}/privacy`,
+          `/api/users/${currentUser.value.id}/privacy`,
           {
             isProfilePrivate: privacySettings.value.keepProfilePrivate,
             isPostPrivate: privacySettings.value.keepPostPrivate
-          },
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          }
         );
         setAlert('success', 'Privacy settings saved successfully!');
         setTimeout(initTooltips, 3000);
@@ -305,7 +301,7 @@ export default {
     const initUserData = async () => {
       if (currentUser.value) {
         try {
-          const response = await axios.get(`http://localhost:3001/api/users/${currentUser.value.id}`);
+          const response = await axios.get(`/api/users/${currentUser.value.id}`);
           const userData = response.data;
           
           userProfile.value = {
@@ -331,11 +327,9 @@ export default {
 
     const updateUserProfilePicture = async (imageUrl) => {
       try {
-        const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/update/profilePicture/${currentUser.value.id}`,
-          { profilePicture: imageUrl },
-          { headers: { 'Authorization': `Bearer ${token}` } }
+          `/api/users/update/profilePicture/${currentUser.value.id}`,
+          { profilePicture: imageUrl }
         );
         userProfile.value.avatar = imageUrl;
       } catch (error) {

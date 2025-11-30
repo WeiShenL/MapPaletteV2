@@ -101,12 +101,11 @@ export default {
         })
 
         showLoginSuccess.value = true
-        isLoggingIn.value = false
 
-        // Redirect after 3 seconds
+        // Redirect after 1 second
         setTimeout(() => {
           window.location.href = '/homepage'
-        }, 3000)
+        }, 1000)
       } catch (error) {
         console.error('Login error:', error)
         showLoginError.value = true
