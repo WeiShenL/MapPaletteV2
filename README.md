@@ -24,11 +24,13 @@
 
 ## Quick Start
 
+> 📖 **For detailed setup instructions and troubleshooting**, see [SETUP_GUIDE.md](./SETUP_GUIDE.md)
+
 ### Prerequisites
 
-- Docker & Docker Compose
-- Node.js 18+ (for local development)
+- Docker & Docker Compose (v2.0+)
 - 10GB free disk space
+- Node.js 18+ (optional, for local development)
 
 ### Setup (5 Minutes)
 
@@ -36,8 +38,12 @@
 # Clone repository
 cd MapPaletteV2
 
-# Copy environment file
+# Validate prerequisites (optional)
+./scripts/validate-setup.sh
+
+# Copy and configure environment file
 cp .env.example .env
+# Edit .env with your values (IMPORTANT: Change passwords and API keys!)
 
 # Run automated setup
 chmod +x setup.sh
@@ -166,7 +172,8 @@ docker compose exec -T supabase-db psql -U postgres postgres < backup.sql
 
 ## Documentation
 
-- **[development.md](./development.md)** - Complete development guide
+- **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete setup guide with troubleshooting
+- **[DOCKER_SETUP.md](./DOCKER_SETUP.md)** - Docker-specific setup instructions
 - **[.env.example](./.env.example)** - Environment configuration reference
 - **[backend/shared/prisma/schema.prisma](./backend/shared/prisma/schema.prisma)** - Database schema
 

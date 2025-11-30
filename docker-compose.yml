@@ -31,7 +31,11 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
-      # Mount individual SQL files to run AFTER embedded migrations
+      # Mount initialization SQL scripts (run in alphabetical order)
+      - ./supabase/volumes/db/init/00-initial-schema.sql:/docker-entrypoint-initdb.d/init-scripts/00-initial-schema.sql:Z
+      - ./supabase/volumes/db/init/01-roles.sql:/docker-entrypoint-initdb.d/init-scripts/01-roles.sql:Z
+      - ./supabase/volumes/db/init/02-storage.sql:/docker-entrypoint-initdb.d/init-scripts/02-storage.sql:Z
+      - ./supabase/volumes/db/init/03-realtime.sql:/docker-entrypoint-initdb.d/init-scripts/03-realtime.sql:Z
       - ./supabase/volumes/db/init/99-roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
       - supabase-db-data:/var/lib/postgresql/data
     networks:
@@ -190,6 +194,8 @@ services:
         condition: service_started
       supabase-meta:
         condition: service_healthy
+    networks:
+      - mappalette-network
 
   supabase-meta:
     container_name: mappalette-supabase-meta
@@ -622,6 +628,11 @@ services:
     container_name: mappalette-caddy
     image: caddy:2-alpine
     restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://localhost/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
     ports:
       - "80:80"
       - "443:443"
@@ -629,6 +640,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+      - caddy-logs:/var/log/caddy
     networks:
       - mappalette-network
     depends_on:
@@ -645,3 +657,4 @@ volumes:
   redis-data:
   caddy-data:
   caddy-config:
+  caddy-logs:
