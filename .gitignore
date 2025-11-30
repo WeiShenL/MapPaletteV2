@@ -56,3 +56,4 @@ serviceAccountKey.json
 **/scripts
 **/scripts/
 **.dockerignore
+/.claude
