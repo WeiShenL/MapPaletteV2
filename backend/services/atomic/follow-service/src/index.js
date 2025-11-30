@@ -3,21 +3,38 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 
+// Import shared middleware and utilities
+const { requestId } = require('/app/shared/middleware/requestId');
+const { httpLogger, logger } = require('/app/shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('/app/shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('/app/shared/utils/swagger');
+
 const followRoutes = require('../routes/followRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Follow Service',
+  version: '1.0.0',
+  description: 'Follow API - handles user follow relationships and social connections',
+  port: process.env.PORT || 3007,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId);
+app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/follow', followRoutes);
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'follow-service',
     version: '1.0.0',
@@ -27,8 +44,33 @@ app.get('/health', (req, res) => {
   });
 });
 
-const PORT = process.env.PORT || 3007;
+// Routes
+app.use('/api/follow', followRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Follow Service running on port ${PORT}`);
+// 404 handler
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const PORT = process.env.PORT || 3007;
+const server = app.listen(PORT, () => {
+  logger.info(`Follow Service running on port ${PORT}`);
+});
+
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });

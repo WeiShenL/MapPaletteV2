@@ -1,10 +1,16 @@
 <template>
   <router-view />
+  <GlobalErrorHandler />
 </template>
 
 <script>
+import GlobalErrorHandler from '@/components/common/GlobalErrorHandler.vue'
+
 export default {
-  name: 'App'
+  name: 'App',
+  components: {
+    GlobalErrorHandler
+  }
 }
 </script>
 

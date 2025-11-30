@@ -162,292 +162,162 @@
 </template>
 
 <script>
-import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { storage } from '@/config/firebase';
+import { ref, onMounted, onUnmounted, nextTick } from 'vue';
 import axios from 'axios';
-import { getCurrentUser, getToken } from '@/services/authService';
+import { useAuth } from '@/composables/useAuth';
+import { useAlert } from '@/composables/useAlert';
+import { uploadProfilePicture, deleteOldProfilePicture as deleteFromStorage } from '@/lib/storage';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
+import AlertNotification from '@/components/common/AlertNotification.vue';
 
 export default {
   name: 'SettingsView',
   components: {
     NavBar,
-    SiteFooter
+    SiteFooter,
+    AlertNotification
   },
-  data() {
-    return {
-      currentTab: 'profile',
-      currentUserId: null,
-      userProfile: {
-        username: '',
-        avatar: '/resources/default-profile.png',
-      },
-      navbarUserProfile: window.currentUser ? {
-        name: window.currentUser.username || '',
-        username: window.currentUser.username || '',
-        avatar: window.currentUser.profilePicture || '/resources/images/default-profile.png'
-      } : null,
-      navItems: [
-        {
-          id: 'profile',
-          icon: 'bi bi-person',
-          label: 'Profile Settings',
-          description: 'Manage your personal information'
-        },
-        {
-          id: 'privacy',
-          icon: 'bi bi-eye',
-          label: 'Privacy',
-          description: 'Control your privacy settings'
-        }
-      ],
-      privacySettings: {
+  setup() {
+    const { currentUser, getToken } = useAuth();
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert();
+
+    const currentTab = ref('profile');
+    const userProfile = ref({
+      username: '',
+      avatar: '/resources/default-profile.png',
+    });
+    const navbarUserProfile = ref(null);
+    const navItems = ref([
+        { id: 'profile', icon: 'bi bi-person', label: 'Profile Settings', description: 'Manage your personal information' },
+        { id: 'privacy', icon: 'bi bi-eye', label: 'Privacy', description: 'Control your privacy settings' }
+    ]);
+    const privacySettings = ref({
         keepProfilePrivate: false,
         keepPostPrivate: false
-      },
-      showAlert: false,
-      photoAlert: {
-        show: false,
-        message: '',
-        type: 'success'
-      },
-      tooltipInstances: [],
-      tooltipInitTimeout: null
-    }
-  },
-  methods: {
-    initTooltips() {
-      // Clear any existing tooltip instances
-      this.destroyTooltips();
-      
-      // Debounce the initialization
-      clearTimeout(this.tooltipInitTimeout);
-      this.tooltipInitTimeout = setTimeout(() => {
+    });
+    const tooltipInstances = ref([]);
+    const tooltipInitTimeout = ref(null);
+    const fileInput = ref(null);
+
+    const initTooltips = () => {
+      destroyTooltips();
+      clearTimeout(tooltipInitTimeout.value);
+      tooltipInitTimeout.value = setTimeout(() => {
         if (typeof window !== 'undefined' && window.bootstrap) {
           const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-          this.tooltipInstances = Array.from(tooltipTriggerList).map(el => {
-            return new window.bootstrap.Tooltip(el, {
-              trigger: 'hover'
-            });
-          });
+          tooltipInstances.value = Array.from(tooltipTriggerList).map(el => new window.bootstrap.Tooltip(el, { trigger: 'hover' }));
         }
       }, 200);
-    },
+    };
 
-    destroyTooltips() {
-      this.tooltipInstances.forEach(tooltip => {
-        if (tooltip) {
-          tooltip.dispose();
-        }
-      });
-      this.tooltipInstances = [];
-    },
+    const destroyTooltips = () => {
+      tooltipInstances.value.forEach(tooltip => tooltip?.dispose());
+      tooltipInstances.value = [];
+    };
 
-    switchTab(tabId) {
-      this.currentTab = tabId;
-      this.$nextTick(() => {
-        this.initTooltips();
-      });
-    },
+    const switchTab = (tabId) => {
+      currentTab.value = tabId;
+      nextTick(initTooltips);
+    };
 
-    handlePrivacyCheckboxClick() {
-      // Handle checkbox click if needed
-    },
-
-    async updateUsername() {
+    const updateUsername = async () => {
       try {
         const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/update/username/${this.currentUserId}`,
-          { username: this.userProfile.username },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          }
+          `http://localhost:3001/api/users/update/username/${currentUser.value.id}`,
+          { username: userProfile.value.username },
+          { headers: { 'Authorization': `Bearer ${token}` } }
         );
-        
-        this.photoAlert.type = 'success';
-        this.photoAlert.message = 'Username updated successfully!';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
+        setAlert('success', 'Username updated successfully!');
       } catch (error) {
         console.error('Error updating username:', error);
-        this.photoAlert.type = 'danger';
-        this.photoAlert.message = 'An error occurred while updating username.';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
+        setAlert('error', 'An error occurred while updating username.');
       }
-    },
+    };
 
-    async deleteOldProfilePicture(oldImageUrl) {
+    const deleteOldProfilePicture = async (oldImageUrl) => {
       try {
-        // Only delete if it's not the default profile picture and is a Firebase Storage URL
-        if (oldImageUrl && 
-            oldImageUrl !== '/resources/default-profile.png' && 
-            oldImageUrl.includes('storage.googleapis.com')) {
-          
-          // Extract the file path from the URL
-          const url = new URL(oldImageUrl);
-          const pathParts = url.pathname.split('/');
-
-          const filePath = pathParts.slice(4).join('/').replace(/%2F/g, '/');
-          
-          if (filePath) {
-            const oldFileRef = storageRef(storage, filePath);
-            await deleteObject(oldFileRef);
-            console.log('Old profile picture deleted successfully');
-          }
-        }
+        const result = await deleteFromStorage(oldImageUrl);
+        if (!result.success) console.warn('Could not delete old profile picture:', result.error);
       } catch (error) {
         console.error('Error deleting old profile picture:', error);
       }
-    },
+    };
 
-    async handleImageUpload(event) {
+    const handleImageUpload = async (event) => {
       const file = event.target.files[0];
-      if (file && (file.type === 'image/jpeg' || file.type === 'image/png')) {
-        const userId = this.currentUserId;
-        const username = this.userProfile.username;
-        const fileRef = storageRef(storage, `profile_pictures/${userId}/${username}.${file.type.split('/')[1]}`);
-        
-        try {
-          // Store the old image URL before updating
-          const oldImageUrl = this.userProfile.avatar;
-          
-          // Upload the new image
-          await uploadBytes(fileRef, file);
-          const imageUrl = await getDownloadURL(fileRef);
-          
-          // Update the profile picture in the database
-          await this.updateUserProfilePicture(imageUrl);
-          
-          // Update local state
-          this.userProfile.avatar = imageUrl;
-          
-          // Delete the old image from storage (if it exists and is not default)
-          await this.deleteOldProfilePicture(oldImageUrl);
-          
-          this.photoAlert.type = 'success';
-          this.photoAlert.message = 'Profile picture updated successfully!';
-          this.photoAlert.show = true;
-          setTimeout(() => {
-            this.photoAlert.show = false;
-          }, 3000);
-        } catch (error) {
-          console.error('Error updating profile picture:', error);
-          this.photoAlert.type = 'danger';
-          this.photoAlert.message = 'An error occurred while updating the profile picture.';
-          this.photoAlert.show = true;
-          setTimeout(() => {
-            this.photoAlert.show = false;
-          }, 3000);
-        }
-      } else {
-        this.photoAlert.type = 'danger';
-        this.photoAlert.message = 'Please select a valid image file (JPEG/PNG).';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
-      }
-    },
+      if (!file) return;
 
-    async removeProfilePicture() {
-      const oldImageUrl = this.userProfile.avatar;
-      
       try {
-        const token = await getToken();
-        await axios.put(
-          `http://localhost:3001/api/users/update/profilePicture/${this.currentUserId}`,
-          { profilePicture: '/resources/default-profile.png' },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          }
-        );
-        
-        // Update local state
-        this.userProfile.avatar = '/resources/default-profile.png';
-        
-        // Delete the old image from storage
-        await this.deleteOldProfilePicture(oldImageUrl);
-        
-        this.photoAlert.type = 'success';
-        this.photoAlert.message = 'Profile picture removed successfully.';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
+        const oldImageUrl = userProfile.value.avatar;
+        const uploadResult = await uploadProfilePicture(file, currentUser.value.id);
+
+        if (!uploadResult.success) {
+          setAlert('error', uploadResult.error || 'Failed to upload image');
+          return;
+        }
+
+        await updateUserProfilePicture(uploadResult.url);
+        userProfile.value.avatar = uploadResult.url;
+        await deleteOldProfilePicture(oldImageUrl);
+        setAlert('success', 'Profile picture updated successfully!');
+      } catch (error) {
+        console.error('Error updating profile picture:', error);
+        setAlert('error', 'An error occurred while updating the profile picture.');
+      }
+    };
+
+    const removeProfilePicture = async () => {
+      const oldImageUrl = userProfile.value.avatar;
+      try {
+        await updateUserProfilePicture('/resources/default-profile.png');
+        userProfile.value.avatar = '/resources/default-profile.png';
+        await deleteOldProfilePicture(oldImageUrl);
+        setAlert('success', 'Profile picture removed successfully.');
       } catch (error) {
         console.error('Error removing profile picture:', error);
-        this.photoAlert.type = 'danger';
-        this.photoAlert.message = 'An error occurred while removing the profile picture.';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
+        setAlert('error', 'An error occurred while removing the profile picture.');
       }
-    },
+    };
     
-    async savePrivacySettings() {
-      this.destroyTooltips(); 
-
+    const savePrivacySettings = async () => {
+      destroyTooltips();
       try {
         const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/${this.currentUserId}/privacy`,
+          `http://localhost:3001/api/users/${currentUser.value.id}/privacy`,
           {
-            isProfilePrivate: this.privacySettings.keepProfilePrivate,
-            isPostPrivate: this.privacySettings.keepPostPrivate
+            isProfilePrivate: privacySettings.value.keepProfilePrivate,
+            isPostPrivate: privacySettings.value.keepPostPrivate
           },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          }
+          { headers: { 'Authorization': `Bearer ${token}` } }
         );
-        
-        this.showAlert = true;
-        setTimeout(() => {
-          this.showAlert = false;
-          this.initTooltips(); 
-        }, 3000);
+        setAlert('success', 'Privacy settings saved successfully!');
+        setTimeout(initTooltips, 3000);
       } catch (error) {
         console.error('Error saving privacy settings:', error);
-        alert('An error occurred while saving privacy settings.');
-        this.initTooltips();
+        setAlert('error', 'An error occurred while saving privacy settings.');
+        initTooltips();
       }
-    },
+    };
 
-    async initUserData() {
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        this.currentUserId = currentUser.uid;
-        
+    const initUserData = async () => {
+      if (currentUser.value) {
         try {
-          const response = await axios.get(`http://localhost:3001/api/users/${this.currentUserId}`);
+          const response = await axios.get(`http://localhost:3001/api/users/${currentUser.value.id}`);
           const userData = response.data;
           
-          this.userProfile = {
+          userProfile.value = {
             username: userData.username || '',
             avatar: userData.profilePicture || '/resources/default-profile.png'
           };
-
-          // Set navbar user profile (this determines which navbar to show)
-          this.navbarUserProfile = {
+          navbarUserProfile.value = {
             name: userData.username || '',
             username: userData.username || '',
             avatar: userData.profilePicture || '/resources/default-profile.png'
           };
-
-          this.privacySettings = {
+          privacySettings.value = {
             keepProfilePrivate: userData.isProfilePrivate ?? false,
             keepPostPrivate: userData.isPostPrivate ?? false
           };
@@ -455,49 +325,51 @@ export default {
           console.error('Error fetching user data:', error);
         }
       } else {
-        console.warn("Current user data is not loaded yet.");
-        this.$router.push('/login');
+        router.push('/login');
       }
-    },
+    };
 
-    async updateUserProfilePicture(imageUrl) {
+    const updateUserProfilePicture = async (imageUrl) => {
       try {
         const token = await getToken();
         await axios.put(
-          `http://localhost:3001/api/users/update/profilePicture/${this.currentUserId}`,
+          `http://localhost:3001/api/users/update/profilePicture/${currentUser.value.id}`,
           { profilePicture: imageUrl },
-          {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          }
+          { headers: { 'Authorization': `Bearer ${token}` } }
         );
-        this.userProfile.avatar = imageUrl;
+        userProfile.value.avatar = imageUrl;
       } catch (error) {
         console.error('Error updating profile picture URL:', error);
-        this.photoAlert.type = 'danger';
-        this.photoAlert.message = 'Error updating profile picture URL.';
-        this.photoAlert.show = true;
-        setTimeout(() => {
-          this.photoAlert.show = false;
-        }, 3000);
+        setAlert('error', 'Error updating profile picture URL.');
       }
-    }
-  },
-  mounted() {
-    this.initUserData();
-    this.$nextTick(() => {
-      this.initTooltips();
+    };
+
+    onMounted(() => {
+      initUserData();
+      nextTick(initTooltips);
     });
-  },
-  updated() {
-    this.$nextTick(() => {
-      this.initTooltips();
+
+    onUnmounted(() => {
+      destroyTooltips();
+      clearTimeout(tooltipInitTimeout.value);
     });
-  },
-  beforeUnmount() {
-    this.destroyTooltips();
-    clearTimeout(this.tooltipInitTimeout);
+
+    return {
+      currentTab,
+      userProfile,
+      navbarUserProfile,
+      navItems,
+      privacySettings,
+      showAlert,
+      alertType,
+      alertMessage,
+      fileInput,
+      switchTab,
+      updateUsername,
+      handleImageUpload,
+      removeProfilePicture,
+      savePrivacySettings,
+    };
   }
 };
 </script>

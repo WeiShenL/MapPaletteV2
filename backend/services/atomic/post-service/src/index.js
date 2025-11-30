@@ -1,26 +1,41 @@
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../../../.env') });
 
+// Import shared middleware and utilities
+const { requestId } = require('/app/shared/middleware/requestId');
+const { httpLogger, logger } = require('/app/shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('/app/shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('/app/shared/utils/swagger');
+
 const postRoutes = require('../routes/postRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Post Service',
+  version: '1.0.0',
+  description: 'Post management API - handles route posts, creation, updates, and deletions',
+  port: process.env.PORT || 3002,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const PORT = process.env.PORT || 3002;
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId);
+app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
-app.use(morgan('dev'));
 
-// Routes
-app.use('/api', postRoutes);
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'post-service',
     version: '1.0.0',
@@ -30,12 +45,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+// Routes
+app.use('/api', postRoutes);
+
+// 404 handler
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const server = app.listen(PORT, () => {
+  logger.info(`Post service running on port ${PORT}`);
 });
 
-app.listen(PORT, () => {
-  console.log(`Post service running on port ${PORT}`);
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });

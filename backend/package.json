@@ -1,0 +1,43 @@
+{
+  "name": "mappalette-backend",
+  "version": "1.0.0",
+  "description": "MapPalette backend monorepo with npm workspaces",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "services/atomic/user-service",
+    "services/atomic/post-service",
+    "services/atomic/interaction-service",
+    "services/atomic/follow-service",
+    "services/composite/feed-service",
+    "services/composite/profile-service",
+    "services/composite/social-interaction-service",
+    "services/composite/explore-routes-service"
+  ],
+  "scripts": {
+    "dev": "npm run start --workspaces",
+    "dev:setup": "npm ci && npm run db:deploy",
+    "build": "npm run lint",
+    "start": "node index.js",
+    "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,css,scss,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,json,md,css,scss,yml,yaml}\"",
+    "type-check": "tsc --noEmit",
+    "db": "prisma --schema=./shared/prisma/schema.prisma",
+    "db:migrate": "prisma migrate deploy --schema=./shared/prisma/schema.prisma",
+    "db:deploy": "npm run db:migrate",
+    "test": "jest",
+    "db:down": "docker compose down -v"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.82.0",
+    "axios": "^1.13.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.32.0",
+    "prisma": "^5.22.0"
+  }
+}

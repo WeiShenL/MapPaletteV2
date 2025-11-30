@@ -2,75 +2,87 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const userController = require('../controllers/userController');
-const { verifyToken, verifyOwnership, verifyAdmin } = require('../middleware/auth');
+const { verifyAuth, verifyOwnership } = require('/app/shared/middleware/auth');
+const { validate, userIDSchema, currentUserIDSchema, usernameSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
-// Configure multer for file uploads
+// Configure multer
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = allowedTypes.test(file.mimetype);
     if (mimetype) {
       return cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG and GIF are allowed.'));
+      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'));
     }
   }
 });
 
-// Create a new user
-router.post('/create', userController.createUser);
+// Public routes - Read operations (lenient rate limit)
+router.get('/getallusers', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
+router.get('/all', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
+router.get('/getcondensed/:currentUserID', lenientLimiter, validate({ params: currentUserIDSchema }), asyncHandler(userController.getCondensedUsers));
+router.get('/:userID', lenientLimiter, validate({ params: userIDSchema }), asyncHandler(userController.getUserById));
+router.get('/:userID/likedPosts', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserLikedPosts));
+router.get('/getfollowers/:userID', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowers));
+router.get('/following/:userID', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowing));
+router.get('/leaderboard/all', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getUsersForLeaderboard));
 
-// Upload profile picture
-router.post('/upload-profile-picture/:userID', upload.single('profilePicture'), userController.uploadProfilePicture);
+// Batch operations (moderate rate limit)
+router.post('/batch', moderateLimiter, asyncHandler(userController.getUsersBatch));
 
-// Get all users (must be before /:userID route)
-router.get('/getallusers', userController.getAllUsers);
-router.get('/all', userController.getAllUsers);
+// Create operations (strict rate limit)
+router.post('/create', createLimiter, asyncHandler(userController.createUser));
 
-// Get condensed user data with following status
-router.get('/getcondensed/:currentUserID', userController.getCondensedUsers);
+// Protected routes (requires authentication) - Moderate rate limit
+router.post(
+  '/upload-profile-picture/:userID',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  upload.single('profilePicture'),
+  asyncHandler(userController.uploadProfilePicture)
+);
 
-// Get user's followers
-router.get('/getfollowers/:userID', userController.getUserFollowers);
+router.put(
+  '/update/username/:userID',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema, body: usernameSchema }),
+  asyncHandler(userController.updateUsername)
+);
 
-// Get users that current user is following
-router.get('/following/:userID', userController.getUserFollowing);
+router.put(
+  '/update/profilePicture/:userID',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  asyncHandler(userController.updateProfilePicture)
+);
 
-// Get user by ID (must be after specific routes)
-router.get('/:userID', userController.getUserById);
+router.put(
+  '/:userID/privacy',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  asyncHandler(userController.updatePrivacySettings)
+);
 
-// Get user's liked posts
-router.get('/:userID/likedPosts', userController.getUserLikedPosts);
+// Internal service routes (require service key) - Strict rate limit
+router.put('/:userID/points', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.updateUserPoints));
+router.patch('/:userID/count', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.updateUserCount));
 
-// Update username (requires authentication and ownership)
-router.put('/update/username/:userID', verifyToken, verifyOwnership, userController.updateUsername);
-
-// Update profile picture (requires authentication and ownership)
-router.put('/update/profilePicture/:userID', verifyToken, verifyOwnership, userController.updateProfilePicture);
-
-// Update privacy settings (requires authentication and ownership)
-router.put('/:userID/privacy', verifyToken, verifyOwnership, userController.updatePrivacySettings);
-
-// Delete user (Admin only)
-router.delete('/:userID/delete', verifyToken, verifyAdmin, userController.deleteUser);
-
-// Assign default profile pictures (Admin only)
-router.put('/assignDefaultProfilePicture', verifyToken, verifyAdmin, userController.assignDefaultProfilePicture);
-
-
-// Points management
-router.put('/:userID/points', userController.updateUserPoints);
-
-// Count management (followers, following, etc.)
-router.patch('/:userID/count', userController.updateUserCount);
-
-// Batch endpoints
-router.post('/batch', userController.getUsersBatch);
-
-// Leaderboard endpoint
-router.get('/leaderboard', userController.getUsersForLeaderboard);
+// Admin routes (require service key for now) - Strict rate limit
+router.delete('/:userID/delete', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.deleteUser));
+router.put('/assignDefaultProfilePicture', strictLimiter, asyncHandler(userController.assignDefaultProfilePicture));
 
 module.exports = router;

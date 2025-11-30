@@ -1,0 +1,17 @@
+{
+  "name": "firebase-to-postgres-migration",
+  "version": "1.0.0",
+  "description": "Migration scripts from Firebase to PostgreSQL",
+  "type": "commonjs",
+  "scripts": {
+    "export": "node 1-export-from-firebase.js",
+    "transform": "node 2-transform-data.js",
+    "import": "node 3-import-to-postgres.js",
+    "migrate": "npm run export && npm run transform && npm run import"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "firebase-admin": "^12.0.0",
+    "dotenv": "^16.3.1"
+  }
+}

@@ -85,7 +85,6 @@
         </div>
         <p v-else class="text-center">No friends match your search.</p>
         <div class="text-center" v-if="displayedFriends < filteredFriends.length">
-          <button class="btn btn-outline-primary mb-4" @click="loadMoreFriends">Load More</button>
         </div>
 
         <!-- Other Users Section with Load More -->
@@ -130,7 +129,6 @@
         </div>
         <p v-else class="text-center">No other users match your search.</p>
         <div class="text-center" v-if="displayedOtherUsers < filteredOtherUsers.length">
-          <button class="btn btn-outline-primary" @click="loadMoreOtherUsers">Load More</button>
         </div>
       </div>
     </div>
@@ -167,19 +165,19 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
-import { getCurrentUser } from '@/services/authService';
+import { useAuth } from '@/composables/useAuth';
+import { useAlert } from '@/composables/useAlert';
+import { useOptimisticUpdate } from '@/composables/useOptimisticUpdate';
 import { userDiscoveryService } from '@/services/userDiscoveryService';
 import socialInteractionService from '@/services/socialInteractionService';
 import LoadingQuotes from '@/components/common/LoadingQuotes.vue';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import * as bootstrap from 'bootstrap';
-// this is for the default profilepic (if user doesnt have any pic)
-const defaultProfileImg = '/resources/images/default-profile.png'
 
+const defaultProfileImg = '/resources/images/default-profile.png'
 
 export default {
   name: 'FriendsView',
@@ -190,7 +188,10 @@ export default {
   },
   setup() {
     const router = useRouter();
-    const currentUser = ref(null);
+    const { currentUser, userProfile: authProfile } = useAuth();
+    const { setAlert } = useAlert();
+    const { toggleOptimistic } = useOptimisticUpdate();
+
     const userProfile = ref({});
     const friends = ref([]);
     const otherUsers = ref([]);
@@ -202,11 +203,7 @@ export default {
     const disableButtons = ref(false);
     const isLoading = ref(true);
     const hoveringFriend = ref(null);
-    const followSuccess = ref(null);
-    const transitionComplete = ref(false);
-    const followingUsers = ref(new Set());
 
-    // Computed properties
     const filteredFriends = computed(() => {
       return friends.value.filter(friend =>
         friend && friend.username && friend.username.toLowerCase().includes((searchQuery.value || '').toLowerCase())
@@ -220,7 +217,6 @@ export default {
       );
     });
 
-    // Methods
     const applyFilters = () => {
       searchQuery.value = searchInput.value;
     };
@@ -231,10 +227,8 @@ export default {
     };
 
     const confirmUnfollow = (friend) => {
-      console.log('Confirm unfollow called with friend:', friend);
       if (!friend || !friend.id) {
-        console.error('Invalid friend object:', friend);
-        alert('Error: Unable to identify user to unfollow');
+        setAlert('error', 'Unable to identify user to unfollow');
         return;
       }
       friendToUnfollow.value = friend;
@@ -243,82 +237,50 @@ export default {
     };
 
     const unfollowConfirmed = async () => {
-      console.log('Unfollow confirmed, friendToUnfollow:', friendToUnfollow.value);
+      if (!friendToUnfollow.value || !friendToUnfollow.value.id) return;
       
-      if (!friendToUnfollow.value || !friendToUnfollow.value.id) {
-        console.error('No friend to unfollow or missing ID');
-        return;
-      }
-      
-      const friendId = friendToUnfollow.value.id;
-      const currentUserId = currentUser.value.uid;
-      
-      console.log('Unfollowing - friendId:', friendId, 'currentUserId:', currentUserId);
+      const friend = friendToUnfollow.value;
+      const friendId = friend.id;
+      const currentUserId = currentUser.value.id;
 
-      // Save the friend data before clearing
-      const previousFriendToUnfollow = { ...friendToUnfollow.value };
-      
-      // Close modal first
+      const friendIndex = friends.value.findIndex(f => f.id === friendId);
+      if (friendIndex === -1) return;
+
+      friends.value.splice(friendIndex, 1);
+      otherUsers.value.unshift(friend);
+
       const unfollowModal = bootstrap.Modal.getInstance(document.getElementById('unfollowModal'));
       unfollowModal.hide();
-      
-      // UI Update first
-      friends.value = friends.value.filter(f => f.id !== friendId);
-      otherUsers.value.push(previousFriendToUnfollow);
-      
-      // Clear the reference after we've saved it
       friendToUnfollow.value = null;
 
       try {
         await socialInteractionService.unfollowUser(friendId, currentUserId);
-        console.log(`Successfully unfollowed user with ID: ${friendId}`);
+        setAlert('success', 'User unfollowed successfully!');
       } catch (error) {
-        console.error('Error unfollowing user:', error);
-        alert('An error occurred while trying to unfollow the user. Please try again.');
-        // Revert UI update if unfollow fails
-        otherUsers.value = otherUsers.value.filter(u => u.id !== friendId);
-        friends.value.push(previousFriendToUnfollow);
+        setAlert('error', 'Failed to unfollow user. Please try again.');
+        const userIndex = otherUsers.value.findIndex(u => u.id === friendId);
+        if (userIndex > -1) {
+            otherUsers.value.splice(userIndex, 1);
+            friends.value.unshift(friend);
+        }
       }
-    };
-
-    const isFollowingUser = (userId) => {
-      return followingUsers.value.has(userId);
     };
 
     const followUser = async (user) => {
       const friendId = user.id;
-      const currentUserId = currentUser.value.uid;
+      const currentUserId = currentUser.value.id;
 
-      console.log(`followed friend id: ${friendId}`);
-      console.log(`my id: ${currentUserId}`);
+      const success = await toggleOptimistic({
+          item: user,
+          key: 'isFollowing',
+          apiCall: () => socialInteractionService.followUser(friendId, currentUserId),
+          onError: () => setAlert('error', 'Failed to follow user. Please try again.')
+      });
 
-      // Set following state
-      followingUsers.value.add(friendId);
-      followSuccess.value = friendId;
-
-      // Optimistically update UI after animation
-      setTimeout(() => {
+      if (success) {
         otherUsers.value = otherUsers.value.filter(u => u.id !== friendId);
         friends.value.unshift(user);
-        transitionComplete.value = true;
-        
-        setTimeout(() => {
-          followSuccess.value = null;
-          transitionComplete.value = false;
-          followingUsers.value.delete(friendId);
-        }, 1000);
-      }, 1000);
-
-      try {
-        await socialInteractionService.followUser(friendId, currentUserId);
-        console.log(`Successfully followed user with ID: ${friendId}`);
-      } catch (error) {
-        console.error('Error following user:', error);
-        alert('An error occurred while trying to follow the user. Please try again.');
-        // Revert UI update on failure
-        friends.value = friends.value.filter(f => f.id !== friendId);
-        otherUsers.value.push(user);
-        followingUsers.value.delete(friendId);
+        setAlert('success', 'User followed successfully!');
       }
     };
 
@@ -335,116 +297,53 @@ export default {
     };
 
     const loadUsers = async () => {
-      console.log('Default profile image URL:', defaultProfileImg);
+      isLoading.value = true;
       try {
-        isLoading.value = true;
-        
-        // Check for window.currentUser first
-        if (window.currentUser) {
-          console.log('Using window.currentUser:', window.currentUser);
-          currentUser.value = { uid: window.currentUser.id };
-          
-          // Set user profile for navbar with full user data
-          userProfile.value = {
-            uid: window.currentUser.id,
-            email: window.currentUser.email,
-            avatar: window.currentUser.profilePicture || defaultProfileImg,
-            username: window.currentUser.username
-          };
-        } else {
-          // Fallback to Firebase auth
-          const user = getCurrentUser();
-          if (!user) {
+        if (!currentUser.value) {
             router.push('/login');
             return;
-          }
-          currentUser.value = user;
-          
-          // Try to get from localStorage
-          const cachedUser = localStorage.getItem('currentUser');
-          if (cachedUser) {
-            try {
-              const userData = JSON.parse(cachedUser);
-              userProfile.value = {
-                uid: userData.id || user.uid,
-                email: userData.email || user.email,
-                avatar: userData.profilePicture || defaultProfileImg,
-                username: userData.username
-              };
-            } catch (e) {
-              // Fallback to basic Firebase data
-              userProfile.value = {
-                uid: user.uid,
-                email: user.email,
-                avatar: user.photoURL || defaultProfileImg
-              };
-            }
-          } else {
-            // Set basic user profile for navbar
-            userProfile.value = {
-              uid: user.uid,
-              email: user.email,
-              avatar: user.photoURL || defaultProfileImg
-            };
-          }
         }
-
-        // Fetch all user data from user-discovery service (optimized single call)
-        const userId = currentUser.value.uid || currentUser.value.id;
-        console.log('Fetching all user data for:', userId);
         
-        try {
-          const allUsersData = await userDiscoveryService.getAllUserData(userId, 100, 0);
-          console.log('All users data response:', allUsersData);
-          
-          // Set friends directly from the response
-          if (allUsersData.friends && Array.isArray(allUsersData.friends)) {
-            friends.value = allUsersData.friends.map(friend => ({
-              id: friend.id || friend.userID,
-              userID: friend.userID || friend.id,
-              uid: friend.id || friend.userID,
-              username: friend.username,
-              profilePicture: friend.profilePicture || defaultProfileImg,
-              isFollowing: true
-            }));
-            console.log('Friends populated:', friends.value);
-          } else {
-            friends.value = [];
-            console.log('No following data found');
-          }
-          
-          // Set other users directly from the response
-          if (allUsersData.otherUsers && Array.isArray(allUsersData.otherUsers)) {
-            otherUsers.value = allUsersData.otherUsers.map(user => ({
-              id: user.id || user.userID,
-              userID: user.userID || user.id,
-              username: user.username,
-              profilePicture: user.profilePicture || defaultProfileImg,
-              isProfilePrivate: user.isProfilePrivate || false,
-              isFollowing: false
-            }));
-            console.log('Other users populated:', otherUsers.value);
-          } else {
-            otherUsers.value = [];
-            console.log('No other users found');
-          }
-        } catch (error) {
-          console.error('Error fetching all user data:', error);
-          friends.value = [];
-          otherUsers.value = [];
-        }
+        userProfile.value = authProfile.value;
+        
+        const userId = currentUser.value.id;
+        const allUsersData = await userDiscoveryService.getAllUserData(userId, 100, 0);
 
-        console.log('Friends:', friends.value);
-        console.log('Other Users:', otherUsers.value);
+        if (allUsersData.friends && Array.isArray(allUsersData.friends)) {
+            friends.value = allUsersData.friends.map(friend => ({
+                ...friend,
+                id: friend.id || friend.userID,
+                isFollowing: true
+            }));
+        }
+        
+        if (allUsersData.otherUsers && Array.isArray(allUsersData.otherUsers)) {
+            otherUsers.value = allUsersData.otherUsers.map(user => ({
+                ...user,
+                id: user.id || user.userID,
+                isFollowing: false
+            }));
+        }
       } catch (error) {
         console.error("Error loading data:", error);
+        setAlert('error', 'Failed to load user data.');
       } finally {
         isLoading.value = false;
       }
     };
 
     onMounted(() => {
-      loadUsers();
+      const handleScroll = () => {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
+          loadMoreFriends()
+          loadMoreOtherUsers()
+        }
+      }
+      window.addEventListener('scroll', handleScroll)
+      loadUsers()
+      onUnmounted(() => {
+        window.removeEventListener('scroll', handleScroll)
+      })
     });
 
     return {
@@ -460,16 +359,12 @@ export default {
       disableButtons,
       isLoading,
       hoveringFriend,
-      followSuccess,
-      transitionComplete,
-      followingUsers,
       filteredFriends,
       filteredOtherUsers,
       applyFilters,
       clearSearch,
       confirmUnfollow,
       unfollowConfirmed,
-      isFollowingUser,
       followUser,
       loadMoreFriends,
       loadMoreOtherUsers,
