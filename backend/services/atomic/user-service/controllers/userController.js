@@ -1,5 +1,6 @@
-const { db } = require('/app/shared/utils/db');
-const { cache } = require('/app/shared/utils/redis');
+const path = require('path');
+const { db } = require(path.join(__dirname, '../../../../shared/utils/db');
+const { cache } = require(path.join(__dirname, '../../../../shared/utils/redis');
 
 // Create a new user (called after Supabase auth creates the user)
 // NOTE: This is typically not needed as the auth trigger handles user creation
@@ -548,7 +549,7 @@ const uploadProfilePicture = async (req, res) => {
   }
 
   try {
-    const { uploadProfilePicture: uploadToStorage } = require('/app/shared/utils/storageService');
+    const { uploadProfilePicture: uploadToStorage } = require(path.join(__dirname, '../../../../shared/utils/storageService');
 
     // Upload to Supabase Storage
     const uploadResult = await uploadToStorage(req.file.buffer, userID, {

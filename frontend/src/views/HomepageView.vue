@@ -198,7 +198,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useInfiniteQuery } from '@tanstack/vue-query'
-import axios from 'axios'
+import axios from '@/lib/axios'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
@@ -209,6 +209,8 @@ import InfiniteScroll from '@/components/common/InfiniteScroll.vue'
 import ProfileSidebar from '@/components/layout/ProfileSidebar.vue'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
+import { userDiscoveryService } from '@/services/userDiscoveryService.js'
+import followService from '@/services/followService.js'
 import { normalizePosts } from '@/utils/postNormalizer'
 import { useAlert } from '@/composables/useAlert'
 import { useOptimisticUpdate } from '@/composables/useOptimisticUpdate'
@@ -253,6 +255,20 @@ export default {
       { id: 2, icon: 'bi bi-map-fill', text: '500+ Shared Routes' },
       { id: 3, icon: 'bi bi-trophy-fill', text: 'Daily Achievements' }
     ])
+
+    // Menu items
+    const menuItems = ref([
+      { id: 1, icon: 'bi bi-house-fill', text: 'Home', route: '/homepage' },
+      { id: 2, icon: 'bi bi-map', text: 'Routes', route: '/routes' },
+      { id: 3, icon: 'bi bi-people', text: 'Friends', route: '/friends' },
+      { id: 4, icon: 'bi bi-trophy', text: 'Leaderboard', route: '/leaderboard' },
+      { id: 5, icon: 'bi bi-gear', text: 'Settings', route: '/settings' }
+    ])
+
+    // Suggested users
+    const suggestedUsers = ref([])
+    const suggestedUsersLoaded = ref(false)
+    const shouldShowSuggestions = computed(() => suggestedUsers.value.length > 0)
 
     // Infinite Scroll with Vue Query
     const fetchUserFeed = async ({ pageParam = 0, signal }) => {
@@ -345,10 +361,47 @@ export default {
         behavior: 'smooth'
       })
     }
-    
+
+    // Load suggested users
+    const loadSuggestedUsers = async () => {
+      try {
+        const userId = currentUser.value?.id || window.currentUser?.id
+        if (!userId) return
+
+        const response = await userDiscoveryService.getSuggestedUsers(userId, 5)
+        suggestedUsers.value = response.users || []
+        suggestedUsersLoaded.value = true
+      } catch (error) {
+        console.error('Error loading suggested users:', error)
+        suggestedUsersLoaded.value = true
+      }
+    }
+
+    // Follow user
+    const followUser = async (user) => {
+      try {
+        const userId = currentUser.value?.id || window.currentUser?.id
+        if (!userId) {
+          setAlert('error', 'Please log in to follow users')
+          return
+        }
+
+        await followService.followUser(userId, user.userID)
+        user.isFollowing = true
+        setAlert('success', `You are now following ${user.username}`)
+
+        // Update user profile stats
+        userProfile.value.stats.following += 1
+      } catch (error) {
+        console.error('Error following user:', error)
+        setAlert('error', 'Failed to follow user. Please try again.')
+      }
+    }
+
     onMounted(() => {
       const initializeApp = () => {
-        // App is initialized
+        // Load suggested users after app is initialized
+        loadSuggestedUsers()
       }
 
       if (window.currentUser) {
@@ -395,12 +448,18 @@ export default {
       currentUser,
       userProfile,
       heroStats,
+      menuItems,
+      suggestedUsers,
+      suggestedUsersLoaded,
+      shouldShowSuggestions,
       activities,
       setAlert,
       likeActivity,
       handleActivityShare,
       openActivityModal,
       scrollToTop,
+      loadSuggestedUsers,
+      followUser,
       feedData,
       fetchNextPage,
       hasNextPage,

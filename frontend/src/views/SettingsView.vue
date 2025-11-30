@@ -163,6 +163,7 @@
 
 <script>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from '@/lib/axios';
 import { useAuth } from '@/composables/useAuth';
 import { useAlert } from '@/composables/useAlert';
@@ -179,6 +180,7 @@ export default {
     AlertNotification
   },
   setup() {
+    const router = useRouter();
     const { currentUser, getToken } = useAuth();
     const { showAlert, alertType, alertMessage, setAlert } = useAlert();
 
@@ -199,6 +201,11 @@ export default {
     const tooltipInstances = ref([]);
     const tooltipInitTimeout = ref(null);
     const fileInput = ref(null);
+    const photoAlert = ref({
+      show: false,
+      type: 'success',
+      message: ''
+    });
 
     const initTooltips = () => {
       destroyTooltips();
@@ -298,6 +305,11 @@ export default {
       }
     };
 
+    const handlePrivacyCheckboxClick = () => {
+      destroyTooltips();
+      setTimeout(initTooltips, 300);
+    };
+
     const initUserData = async () => {
       if (currentUser.value) {
         try {
@@ -358,11 +370,13 @@ export default {
       alertType,
       alertMessage,
       fileInput,
+      photoAlert,
       switchTab,
       updateUsername,
       handleImageUpload,
       removeProfilePicture,
       savePrivacySettings,
+      handlePrivacyCheckboxClick,
     };
   }
 };

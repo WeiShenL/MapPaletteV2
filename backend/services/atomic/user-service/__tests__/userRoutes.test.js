@@ -1,3 +1,4 @@
+const path = require('path');
 /**
  * Integration Tests for User Service
  */
@@ -5,8 +6,8 @@
 const request = require('supertest');
 const express = require('express');
 const userRoutes = require('../routes/userRoutes');
-const { cleanupDatabase, createTestUser } = require('/app/shared/tests/helpers/testHelpers');
-const { db } = require('/app/shared/utils/db');
+const { cleanupDatabase, createTestUser } = require(path.join(__dirname, '../../../../shared/tests/helpers/testHelpers');
+const { db } = require(path.join(__dirname, '../../../../shared/utils/db');
 
 // Create test app
 const app = express();

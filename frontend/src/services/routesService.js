@@ -1,6 +1,6 @@
 import axios from '@/lib/axios';
 
-const API_BASE_URL = import.meta.env.VITE_EXPLORE_ROUTES_URL || 'http://localhost:3008';
+const API_BASE_URL = import.meta.env.VITE_EXPLORE_ROUTES_SERVICE_URL || 'http://localhost:3008';
 
 export const routesService = {
   // Get all routes with pagination and filters

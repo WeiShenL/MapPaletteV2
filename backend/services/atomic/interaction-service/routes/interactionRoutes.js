@@ -1,10 +1,11 @@
+const path = require('path');
 const express = require('express');
 const router = express.Router();
 const interactionController = require('../controllers/interactionController');
-const { verifyAuth } = require('/app/shared/middleware/auth');
-const { validate, uuidSchema, commentSchema, paginationSchema } = require('/app/shared/middleware/validator');
-const { moderateLimiter, lenientLimiter, strictLimiter } = require('/app/shared/middleware/rateLimiter');
-const { asyncHandler } = require('/app/shared/middleware/errorHandler');
+const { verifyAuth } = require(path.join(__dirname, '../../../../shared/middleware/auth');
+const { validate, uuidSchema, commentSchema, paginationSchema } = require(path.join(__dirname, '../../../../shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter } = require(path.join(__dirname, '../../../../shared/middleware/rateLimiter');
+const { asyncHandler } = require(path.join(__dirname, '../../../../shared/middleware/errorHandler');
 const { z } = require('zod');
 
 // Entity validation schema

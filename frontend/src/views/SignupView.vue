@@ -398,7 +398,7 @@ export default {
         } catch (signInError) {
           console.error('Failed to sign in after account creation:', signInError)
           // Account was created but sign in failed - handle gracefully
-          showAlertMessage('warning', 'Account created successfully! Please try logging in.')
+          setAlert('warning', 'Account created successfully! Please try logging in.')
         }
 
         showSuccessAlert.value = true
