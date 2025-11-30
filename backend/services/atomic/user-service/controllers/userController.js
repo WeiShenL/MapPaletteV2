@@ -548,20 +548,39 @@ const uploadProfilePicture = async (req, res) => {
   }
 
   try {
-    // TODO: Implement Supabase Storage upload
-    // For now, return a placeholder
-    const publicUrl = `/uploads/${userID}-${Date.now()}.jpg`;
+    const { uploadProfilePicture: uploadToStorage } = require('/app/shared/utils/storageService');
 
+    // Upload to Supabase Storage
+    const uploadResult = await uploadToStorage(req.file.buffer, userID, {
+      originalName: req.file.originalname,
+      mimeType: req.file.mimetype,
+      size: req.file.size
+    });
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        message: 'Failed to upload profile picture to storage',
+        error: uploadResult.error
+      });
+    }
+
+    const publicUrl = uploadResult.publicUrl;
+
+    // Update user profile picture in database
     await db.user.update({
       where: { id: userID },
       data: { profilePicture: publicUrl },
     });
 
+    // Clear cache
     await cache.del(`user:${userID}`);
 
+    console.log(`[UPLOAD_PROFILE_PICTURE] Success: ${userID} -> ${publicUrl}`);
+
     return res.json({
-      message: 'Profile picture uploaded',
-      profilePicture: publicUrl
+      message: 'Profile picture uploaded successfully',
+      profilePicture: publicUrl,
+      url: publicUrl
     });
   } catch (error) {
     console.error(`[UPLOAD_PROFILE_PICTURE] Error:`, error);

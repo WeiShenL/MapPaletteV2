@@ -108,7 +108,7 @@
                              to="/settings">Settings</router-link>
               </li>
               <li><hr class="dropdown-divider"></li>
-              <li><router-link class="dropdown-item" to="/logout">Log Out</router-link></li>
+              <li><a class="dropdown-item" href="#" @click.prevent="handleLogout">Log Out</a></li>
             </ul>
           </li>
         </ul>
@@ -118,8 +118,9 @@
 </template>
 
 <script>
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ref } from 'vue'
+import { useAuth } from '@/composables/useAuth'
 
 export default {
   name: 'NavBar',
@@ -131,21 +132,38 @@ export default {
   },
   setup() {
     const route = useRoute()
+    const router = useRouter()
+    const { logout } = useAuth()
     const isMenuOpen = ref(false)
-    
+
     const defaultAvatar = '/resources/images/default-profile.png'
-    
+
     const currentPage = () => {
       // Get the current route name from Vue Router
       return route.name || ''
     }
-    
+
     const isCurrentPage = (pageName) => {
       return currentPage() === pageName
     }
-    
+
     const isSearchRelatedPage = () => {
       return ['routes', 'friends'].includes(currentPage())
+    }
+
+    const handleLogout = async () => {
+      try {
+        await logout()
+        // Show success message using browser's built-in notification or a simple alert
+        // You can also emit an event to show a toast notification if you have a toast component
+
+        // Redirect to home page after a short delay
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 500)
+      } catch (error) {
+        console.error('Logout failed:', error)
+      }
     }
     
     const isProfileRelatedPage = () => {
@@ -163,7 +181,8 @@ export default {
       isSearchRelatedPage,
       isProfileRelatedPage,
       isMenuOpen,
-      toggleMenu
+      toggleMenu,
+      handleLogout
     }
   }
 }
