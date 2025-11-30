@@ -312,27 +312,18 @@ export default {
     const descriptionLength = computed(() => postDescription.value.length)
     const isSubmitDisabled = computed(() => descriptionLength.value >= maxDescriptionLength.value)
     
-    // Load Google Maps API key from environment or external service
+    // Load Google Maps API key from environment
     const loadGoogleMapsScript = async () => {
       try {
-        // Try to use environment variable first
+        // Use environment variable for API key
         const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-        const isValidKey = apiKey &&
-          apiKey !== 'your_google_maps_api_key_here' &&
-          apiKey !== 'your-development-google-maps-api-key' &&
-          apiKey !== 'your-google-maps-api-key' &&
-          apiKey !== 'your-production-google-maps-api-key'
 
-        if (isValidKey) {
-          mapsApiKey.value = apiKey
-        } else {
-          // Fallback to external service
-          const response = await fetch('https://app-907670644284.us-central1.run.app/getGoogleMapsApiKey')
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-          const data = await response.json()
-          mapsApiKey.value = data.apiKey
+        if (!apiKey || apiKey.startsWith('your')) {
+          throw new Error('Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY in .env file.')
         }
-        
+
+        mapsApiKey.value = apiKey
+
         // Dynamically load Google Maps script with marker library for Advanced Markers
         return new Promise((resolve, reject) => {
           const script = document.createElement('script')
@@ -344,8 +335,8 @@ export default {
           document.body.appendChild(script)
         })
       } catch (error) {
-        console.error('Error fetching API key:', error)
-        setAlert('error', 'Could not load Google Maps API key. Please make sure it is set in your .env file.')
+        console.error('Error loading Google Maps:', error)
+        setAlert('error', 'Could not load Google Maps API. Please make sure VITE_GOOGLE_MAPS_API_KEY is set in your .env file.')
       }
     }
     

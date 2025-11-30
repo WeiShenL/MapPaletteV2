@@ -109,6 +109,7 @@ import axios from '@/lib/axios';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import { useAuth } from '@/composables/useAuth';
+import { useAlert } from '@/composables/useAlert';
 
 export default {
   name: 'CreatePostView',
@@ -119,6 +120,7 @@ export default {
   setup() {
     const router = useRouter();
     const { currentUser } = useAuth();
+    const { setAlert } = useAlert();
     const loading = ref(false);
     const error = ref('');
     const userProfile = ref(null);
@@ -178,7 +180,7 @@ export default {
         );
 
         if (response.data.id) {
-          alert('Post created successfully!');
+          setAlert('success', 'Post created successfully!');
           router.push('/homepage');
         }
       } catch (err) {

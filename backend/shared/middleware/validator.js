@@ -74,6 +74,16 @@ const userIdSchema = z.object({
   userId: uuidSchema,
 });
 
+// User ID schema with capital D (for user-service routes)
+const userIDSchema = z.object({
+  userID: uuidSchema,
+});
+
+// Current User ID schema with capital D (for routes using :currentUserID)
+const currentUserIDSchema = z.object({
+  currentUserID: uuidSchema,
+});
+
 const usernameSchema = z.object({
   username: z
     .string()
@@ -152,6 +162,8 @@ module.exports = {
   paginationSchema,
   // User schemas
   userIdSchema,
+  userIDSchema,
+  currentUserIDSchema,
   usernameSchema,
   emailSchema,
   // Post schemas

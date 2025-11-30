@@ -137,24 +137,28 @@
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth } from '@/composables/useAuth';
+import { useAlert } from '@/composables/useAlert';
 import TermsModal from '@/components/auth/TermsModal.vue'
 import PrivacyModal from '@/components/auth/PrivacyModal.vue'
 const mappaletteLogo = '/resources/images/index/mappalettelogo.png'
 const signupVideo = '/resources/videos/signup-video.mp4'
 import axios from '@/lib/axios'
+import AlertNotification from '@/components/common/AlertNotification.vue';
 
 export default {
   name: 'SignupView',
   components: {
     TermsModal,
-    PrivacyModal
+    PrivacyModal,
+    AlertNotification
   },
   setup() {
     const router = useRouter()
     const { login, signup } = useAuth()
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert()
     const profileInput = ref(null)
     const profilePreview = ref(null)
     const profileFile = ref(null)
@@ -233,8 +237,16 @@ export default {
       showErrorAlert.value = true
     }
 
-    const triggerFileInput = () => {
-      profileInput.value.click()
+    const triggerFileInput = async () => {
+      await nextTick()
+      try {
+        const inputElement = profileInput.value || document.querySelector('input[type="file"]')
+        if (inputElement) {
+          inputElement.click()
+        }
+      } catch (error) {
+        console.error('Error triggering file input:', error)
+      }
     }
 
     const handleFileSelect = (event) => {
@@ -270,7 +282,7 @@ export default {
         }
         reader.readAsDataURL(file)
       } else {
-        alert('Please select a valid static image file (JPG, JPEG, PNG, BMP, WEBP, or TIFF).')
+        setAlert('error', 'Please select a valid static image file (JPG, JPEG, PNG, BMP, WEBP, or TIFF).')
       }
     }
 
@@ -298,7 +310,7 @@ export default {
               handleFileUpload(file)
             } catch (error) {
               console.error("Error fetching image:", error)
-              alert("Unable to retrieve image from URL.")
+              setAlert('error', "Unable to retrieve image from URL.")
             }
           })
         }
@@ -322,10 +334,13 @@ export default {
       if (!isValid) {
         showErrorAlert.value = true
         // Scroll to top to show errors
-        document.querySelector('.signup-container').scrollTo({
-          top: 0,
-          behavior: 'smooth'
-        })
+        const container = document.querySelector('.signup-container')
+        if (container) {
+          container.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+          })
+        }
         return
       }
 
@@ -412,12 +427,15 @@ export default {
 
         const errorMessage = errorMap[rawErrorMessage] || rawErrorMessage || 'An unknown error occurred during signup.';
         showAlertMessage(errorMessage);
-        
+
         // Scroll to top to show error
-        document.querySelector('.signup-container').scrollTo({
-          top: 0,
-          behavior: 'smooth'
-        })
+        const container = document.querySelector('.signup-container')
+        if (container) {
+          container.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+          })
+        }
       }
     }
 
@@ -441,7 +459,10 @@ export default {
       onDragOver,
       onDragLeave,
       onDrop,
-      handleSubmit
+      handleSubmit,
+      showAlert,
+      alertType,
+      alertMessage
     }
   }
 }

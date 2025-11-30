@@ -70,7 +70,8 @@ services:
       GOTRUE_JWT_EXP: ${JWT_EXPIRY:-3600}
       GOTRUE_JWT_SECRET: ${JWT_SECRET}
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
-      GOTRUE_MAILER_AUTOCONFIRM: ${ENABLE_EMAIL_AUTOCONFIRM:-true}
+      GOTRUE_MAILER_AUTOCONFIRM: 'true'
+      GOTRUE_MAILER_EXTERNAL_HOSTS: localhost,localhost:3000,localhost:8000
     networks:
       - mappalette-network
 
@@ -575,21 +576,14 @@ services:
         # Supabase
         - VITE_SUPABASE_URL=${SUPABASE_PUBLIC_URL}
         - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
-        # API URLs - Core Services
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
-        - VITE_USER_SERVICE_URL=http://user-service:5000
-        - VITE_FEED_SERVICE_URL=http://feed-service:5000
-        - VITE_POST_SERVICE_URL=http://post-service:5000
-        - VITE_INTERACTION_SERVICE_URL=http://interaction-service:5000
-        - VITE_FOLLOW_SERVICE_URL=http://follow-service:5000
-        # API URLs - Composite Services
-        - VITE_PROFILE_SERVICE_URL=http://profile-service:5000
-        - VITE_SOCIAL_INTERACTION_URL=http://social-interaction-service:5000
-        - VITE_EXPLORE_ROUTES_URL=http://explore-routes-service:5000
-        - VITE_LEADERBOARD_SERVICE_URL=http://leaderboard-service:5000
-        - VITE_USER_DISCOVERY_SERVICE_URL=http://user-discovery-service:5000
+        # API URLs - Core Services (use Caddy proxy instead of direct service ports)
+        - VITE_API_URL=${VITE_API_URL:-http://localhost}
+        - VITE_FEED_SERVICE_URL=${VITE_FEED_SERVICE_URL:-http://localhost/api/feed}
+        - VITE_USER_SERVICE_URL=${VITE_USER_SERVICE_URL:-http://localhost/api/users}
+        - VITE_POST_SERVICE_URL=${VITE_POST_SERVICE_URL:-http://localhost/api/posts}
         # Google Maps
         - VITE_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+        - VITE_GOOGLE_MAPS_MAP_ID=${VITE_GOOGLE_MAPS_MAP_ID:-DEMO_MAP_ID}
         # Application
         - VITE_APP_NAME=MapPalette
         - VITE_APP_URL=${VITE_APP_URL:-http://localhost:3000}

@@ -142,33 +142,31 @@
                           <WelcomeTutorial v-if="activities.length === 0" />
 
                           <!-- Activity Cards -->
-                          <template v-else>
-                              <activity-card
-                                  v-for="activity in activities"
-                                  :key="activity.id"
-                                  :activity="activity"
-                                  :current-user="currentUser"
-                                  @like="likeActivity"
-                                  @share="handleActivityShare"  
-                                  @show-share-alert="setAlert"
-                                  @open-modal="openActivityModal">
-                              </activity-card>
-                              
-                              <!-- Load More Button -->
-                              <div v-if="hasMorePosts && !isLoadingMore" class="text-center mt-4 mb-4">
-                                  <button @click="loadMorePosts" class="btn btn-outline-primary">
-                                      <i class="bi bi-arrow-down-circle me-2"></i>
-                                      Load More Posts
-                                  </button>
-                              </div>
-                              
-                              <!-- Loading More Indicator -->
-                              <div v-if="isLoadingMore" class="text-center mt-4 mb-4">
-                                  <div class="spinner-border text-primary" role="status">
-                                      <span class="visually-hidden">Loading...</span>
-                                  </div>
-                              </div>
-                          </template>
+                          <InfiniteScroll
+                              v-else
+                              :queryResult="{
+                                  data: feedData,
+                                  isLoading: isLoadingActivities,
+                                  isFetchingNextPage,
+                                  hasNextPage,
+                                  fetchNextPage
+                              }"
+                              emptyMessage="No activities to show yet. Follow some runners to see their posts!"
+                              endMessage="You've seen all activities."
+                          >
+                              <template #default="{ items }">
+                                  <activity-card
+                                      v-for="activity in items"
+                                      :key="activity.id"
+                                      :activity="activity"
+                                      :current-user="currentUser"
+                                      @like="likeActivity"
+                                      @share="handleActivityShare"
+                                      @show-share-alert="setAlert"
+                                      @open-modal="openActivityModal">
+                                  </activity-card>
+                              </template>
+                          </InfiniteScroll>
                       </div>
                   </div>
 
@@ -199,6 +197,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useInfiniteQuery } from '@tanstack/vue-query'
 import axios from 'axios'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
@@ -206,12 +205,13 @@ import ActivityCard from '@/components/homepage/ActivityCard.vue'
 import PostDetailModal from '@/components/common/PostDetailModal.vue'
 import AlertNotification from '@/components/common/AlertNotification.vue'
 import WelcomeTutorial from '@/components/common/WelcomeTutorial.vue'
+import InfiniteScroll from '@/components/common/InfiniteScroll.vue'
+import ProfileSidebar from '@/components/layout/ProfileSidebar.vue'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
-import { userDiscoveryService } from '@/services/userDiscoveryService.js'
 import { normalizePosts } from '@/utils/postNormalizer'
-import { calculateTimeSince } from '@/utils/dateFormatter'
 import { useAlert } from '@/composables/useAlert'
+import { useOptimisticUpdate } from '@/composables/useOptimisticUpdate'
 
 export default {
   name: 'HomepageView',
@@ -221,27 +221,19 @@ export default {
     ActivityCard,
     PostDetailModal,
     AlertNotification,
-    WelcomeTutorial
+    WelcomeTutorial,
+    InfiniteScroll,
+    ProfileSidebar
   },
   setup() {
     // Composables
-    const { showAlert, alertType, alertMessage, setAlert, dismissAlert } = useAlert()
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert()
+    const { toggleOptimistic } = useOptimisticUpdate()
 
     // State
-    const isLoadingActivities = ref(false)
-    // Local microservice endpoints
-    const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001/api'
     const currentUser = ref(null)
     const currentUserId = ref(null)
     const selectedActivity = ref(null)
-    const lastApiCallTime = ref(0)
-    const postId = ref(null)
-    const suggestedUsers = ref([])
-    const suggestedUsersLoaded = ref(false)
-    const activities = ref([])
-    const isLoadingMore = ref(false)
-    const hasMorePosts = ref(true)
-    const currentOffset = ref(0)
     
     // User profile
     const userProfile = ref({
@@ -257,43 +249,38 @@ export default {
     
     // Hero stats
     const heroStats = ref([
-      { 
-        id: 1, 
-        icon: 'bi bi-people-fill', 
-        text: '2.5k Active Runners' 
-      },
-      { 
-        id: 2, 
-        icon: 'bi bi-map-fill', 
-        text: '500+ Shared Routes' 
-      },
-      { 
-        id: 3, 
-        icon: 'bi bi-trophy-fill', 
-        text: 'Daily Achievements' 
-      }
+      { id: 1, icon: 'bi bi-people-fill', text: '2.5k Active Runners' },
+      { id: 2, icon: 'bi bi-map-fill', text: '500+ Shared Routes' },
+      { id: 3, icon: 'bi bi-trophy-fill', text: 'Daily Achievements' }
     ])
-    
-    // Menu items
-    const menuItems = ref([
-      { 
-        id: 1, 
-        icon: 'bi bi-activity', 
-        text: 'My Activities', 
-        route: '/profile' 
-      },
-      { 
-        id: 2, 
-        icon: 'bi bi-trophy', 
-        text: 'Leaderboard', 
-        route: '/leaderboard' 
-      }
-    ])
-    
-    // Computed
-    const shouldShowSuggestions = computed(() => {
-      return userProfile.value.stats.following === 0 || 
-        (activities.value && activities.value.length === 0)
+
+    // Infinite Scroll with Vue Query
+    const fetchUserFeed = async ({ pageParam = 0, signal }) => {
+        const currentUserId = window.currentUser.id
+        const feedData = await feedService.getUserFeed(currentUserId, 10, pageParam, { signal })
+        return feedData
+    }
+
+    const {
+        data: feedData,
+        fetchNextPage,
+        hasNextPage,
+        isLoading: isLoadingActivities,
+        isFetchingNextPage,
+    } = useInfiniteQuery({
+        queryKey: ['userFeed'],
+        queryFn: fetchUserFeed,
+        getNextPageParam: (lastPage) => {
+            if (lastPage.pagination?.hasMore) {
+                return lastPage.pagination.offset + lastPage.posts.length
+            }
+            return undefined
+        }
+    })
+
+    const activities = computed(() => {
+        if (!feedData.value?.pages) return []
+        return feedData.value.pages.flatMap(page => normalizePosts(page.posts))
     })
     
     // Methods
@@ -310,258 +297,16 @@ export default {
       }
     }
     
-    const loadSuggestedUsers = async () => {
-      if (!currentUser.value || !currentUser.value.id) {
-        console.log('Current user not available yet')
-        return
-      }
-      try {
-        const response = await userDiscoveryService.getSuggestedUsers(currentUser.value.id, 5)
-        
-        if (response.users && Array.isArray(response.users)) {
-          // Map the response to match frontend expectations
-          suggestedUsers.value = response.users.map(user => ({
-            userID: user.userID || user.id,
-            username: user.username,
-            profilePicture: user.profilePicture,
-            isFollowing: false 
-          }))
-          console.log('Loaded suggested users:', suggestedUsers.value)
-        } else {
-          console.log('No suggested users found')
-          suggestedUsers.value = []
-        }
-        suggestedUsersLoaded.value = true
-      } catch (error) {
-        console.error('Error loading suggested users:', error)
-        suggestedUsers.value = []
-        suggestedUsersLoaded.value = true
-      }
-    }
-    
-    const refreshUserData = async () => {
-      try {
-        const response = await axios.get(`${USER_SERVICE_URL}/users/${currentUser.value.id}`)
-        if (response.data) {
-          window.currentUser = response.data
-          currentUser.value = response.data
-          updateUserProfile(response.data)
-          localStorage.setItem('currentUser', JSON.stringify(response.data))
-        }
-      } catch (error) {
-        console.error('Error refreshing user data:', error)
-      }
-    }
-
-    const followUser = async (user) => {
-      try {
-        // Store current user ID before any async operations
-        const currentUserId = currentUser.value.id
-        
-        // Debug logging (remove ltr)
-        console.log('[FOLLOW] Starting follow for user:', user.userID)
-        console.log('[FOLLOW] Current user before follow:', currentUser.value)
-        console.log('[FOLLOW] Current user ID:', currentUserId)
-        
-        // Make API call to follow user using social interaction service
-        await socialInteractionService.followUser(user.userID, currentUserId)
-        
-        // Update UI & suggested user list
-        user.isFollowing = true
-        suggestedUsers.value = suggestedUsers.value.filter(u => u.userID !== user.userID)
-        
-        // Update user profile stats locally
-        userProfile.value.stats.following += 1
-        
-        // Debug logging before refresh (remove ltr)
-        console.log('[FOLLOW] Current user before refresh:', currentUser.value)
-        
-        // Refresh user data to get updated counts
-        await refreshUserData()
-        
-        // Debug logging after refresh (remove ltr)
-        console.log('[FOLLOW] Current user after refresh:', currentUser.value)
-        console.log('[FOLLOW] Current user ID after refresh:', currentUser.value.id)
-        
-        // Show success message with refresh warning
-        setAlert('success', 'User followed successfully! Refresh the page to see their posts.')
-        
-        // Refresh suggested users
-        await loadSuggestedUsers()
-      } catch (error) {
-        console.error('Error following user:', error)
-        console.error('Error details:', error.response?.data)
-        setAlert('error', 'Failed to follow user. Please try again.')
-      }
-    }
-
-    const unfollowUser = async (user) => {
-      try {
-        // Make API call to unfollow user using social interaction service
-        await socialInteractionService.unfollowUser(user.userID, currentUser.value.id)
-        
-        // Update UI
-        user.isFollowing = false
-        
-        // Update user profile stats
-        userProfile.value.stats.following = Math.max(0, userProfile.value.stats.following - 1)
-        
-        // Show success message
-        setAlert('success', 'User unfollowed successfully!')
-        
-        // Refresh activities
-        await fetchPosts()
-      } catch (error) {
-        console.error('Error unfollowing user:', error)
-        setAlert('error', 'Failed to unfollow user. Please try again.')
-      }
-    }
-    
-    const fetchSinglePost = async (postId) => {
-      isLoadingActivities.value = true
-      try {
-        // Use Feed Service to get complete post details
-        const post = await feedService.getPostDetails(postId, currentUser.value.id)
-        
-        if (!post) {
-          console.error('No post data received')
-          activities.value = []
-          return
-        }
-
-        // Initialize the activity with post data
-        const activity = {
-          id: post.id,
-          title: post.title,
-          user: post.username,
-          userImg: post.profilePicture || userProfile.value.avatar,
-          date: calculateTimeSince(post.createdAt),
-          location: post.waypoints && post.waypoints[0] ? post.waypoints[0].address : '',
-          description: post.description,
-          distance: post.distance.includes('km') ? post.distance : `${post.distance} km`,
-          time: post.time || '',
-          mapImg: post.image,
-          likes: post.likeCount,
-          shares: post.shareCount,
-          commentsList: post.commentsList || [],
-          isLiked: post.isLiked,
-          userID: post.userId
-        }
-
-        // Update share count (this was from shared link)
-        try {
-          await socialInteractionService.sharePost(postId, currentUser.value.id)
-        } catch (error) {
-          console.error('Error updating share count:', error)
-        }
-
-        // Set as only activity
-        activities.value = [activity]
-
-
-      } catch (error) {
-        console.error('Error fetching single post:', error)
-        activities.value = []
-      } finally {
-        isLoadingActivities.value = false
-      }
-    }
-    
-    const fetchPosts = async (loadMore = false) => {
-      if (loadMore) {
-        isLoadingMore.value = true
-      } else {
-        isLoadingActivities.value = true
-        currentOffset.value = 0
-        activities.value = []
-      }
-      
-      try {
-        const currentUserId = window.currentUser.id
-        console.log('Current user ID:', currentUserId)
-
-        console.log('Fetching posts for current user...')
-        // Use the Feed Composite Service with pagination
-        const feedData = await feedService.getUserFeed(
-          currentUserId, 
-          10, // limit
-          currentOffset.value // offset
-        )
-        const allPosts = feedData.posts
-        console.log(`Total posts fetched: ${allPosts.length}`)
-
-        if (allPosts && allPosts.length > 0) {
-          // Normalize posts using the normalizer utility
-          const normalizedPosts = normalizePosts(allPosts)
-
-          // Map normalized posts to activities format with additional fields
-          const newActivities = normalizedPosts.map(post => ({
-            ...post,
-            user: post.username,
-            userImg: post.profilePicture || userProfile.value.avatar,
-            date: calculateTimeSince(post.createdAt),
-            location: post.waypoints?.[0]?.address || '',
-            routeTitle: post.title,
-            distance: post.distance?.includes?.('km')
-              ? post.distance
-              : `${post.distance || 0} km`,
-            mapImg: post.imageUrl,
-            likes: post.likeCount,
-            shares: post.shareCount,
-            commentsList: post.commentsList || [],
-            userID: post.userId
-          }))
-
-          if (loadMore) {
-            activities.value = [...activities.value, ...newActivities]
-          } else {
-            activities.value = newActivities
-          }
-
-          // Update pagination state
-          hasMorePosts.value = feedData.pagination?.hasMore || false
-          currentOffset.value += allPosts.length
-
-        } else {
-          if (!loadMore) {
-            activities.value = []
-          }
-          hasMorePosts.value = false
-        }
-
-      } catch (error) {
-        console.error('Error in fetchPosts:', error)
-        if (!loadMore) {
-          activities.value = []
-        }
-      } finally {
-        isLoadingActivities.value = false
-        isLoadingMore.value = false
-      }
-    }
-    
-    const loadMorePosts = () => {
-      if (!isLoadingMore.value && hasMorePosts.value) {
-        fetchPosts(true)
-      }
-    }
-    
     const handleActivityShare = async (activity) => {
       try {
-        // Use the new Interaction Service
         const userId = currentUser.value?.id || window.currentUser?.id
         if (!userId) {
-          console.error('User ID not available for share')
           setAlert('error', 'Please refresh the page and try again')
           return
         }
         await socialInteractionService.sharePost(activity.id, userId)
-
-        // Increment the share count on the frontend if the request succeeds
         activity.shares = (activity.shares || 0) + 1
       } catch (error) {
-        console.error("Error sharing post:", error)
-        // Show error alert
         setAlert('error', 'Failed to share post')
       }
     }
@@ -571,58 +316,28 @@ export default {
     }
     
     const likeActivity = async (activity) => {
-      // Rate limit to prevent rapid toggling
-      const currentTime = Date.now()
-      if (currentTime - lastApiCallTime.value < 1000) {
+      const userId = currentUser.value?.id || window.currentUser?.id
+      if (!userId) {
+        setAlert('error', 'Please log in to like a post.')
         return
       }
-      lastApiCallTime.value = currentTime
 
-      try {
-        // Use the new Interaction Service
-        // Use currentUser.value.id instead of currentUserId.value
-        const userId = currentUser.value?.id || window.currentUser?.id
-        if (!userId) {
-          console.error('User ID not available')
-          alert('Please refresh the page and try again')
-          return
-        }
-        
-        if (activity.isLiked) {
-          await socialInteractionService.unlikePost(activity.id, userId)
-        } else {
-          await socialInteractionService.likePost(activity.id, userId)
-        }
-
-        // Toggle the like status
-        activity.isLiked = !activity.isLiked
-        activity.likes += activity.isLiked ? 1 : -1
-
-        // Ensure postsLiked is defined as an array
-        if (!Array.isArray(currentUser.value.postsLiked)) {
-            currentUser.value.postsLiked = []
+      await toggleOptimistic({
+        item: activity,
+        key: 'isLiked',
+        countKey: 'likes',
+        apiCall: (isLiked) => {
+          if (isLiked) {
+            return socialInteractionService.likePost(activity.id, userId)
+          } else {
+            return socialInteractionService.unlikePost(activity.id, userId)
           }
-
-        // Update the `postsLiked` array for the current user
-        if (activity.isLiked) {
-          // Add activity ID if not already present
-          if (!currentUser.value.postsLiked.includes(activity.id)) {
-            currentUser.value.postsLiked.push(activity.id)
-          }
-        } else {
-          // Remove activity ID if it exists
-          const index = currentUser.value.postsLiked.indexOf(activity.id)
-          if (index > -1) {
-            currentUser.value.postsLiked.splice(index, 1)
-          }
+        },
+        onError: () => {
+          setAlert('error', 'Failed to update like. Please try again.')
         }
-      } catch (error) {
-        console.error('Error toggling like:', error)
-
-        alert('Failed to update like. Please try again.')
-      }
+      })
     }
-    
     
     const scrollToTop = () => {
       window.scrollTo({
@@ -631,39 +346,17 @@ export default {
       })
     }
     
-    // Initialize on mount
     onMounted(() => {
-      const urlParams = new URLSearchParams(window.location.search)
-      postId.value = urlParams.get('id')
-
-      const initializeApp = async () => {
-        try {
-          // Load suggested users first
-          await loadSuggestedUsers()
-          
-          // Then try to fetch posts
-          if (postId.value) {
-            await fetchSinglePost(postId.value)
-          } else {
-            await fetchPosts()
-          }
-        } catch (error) {
-          console.error('Error during initialization:', error)
-          // Still continue to show the app even if there's an error
-        } finally {
-          // Loading complete
-        }
+      const initializeApp = () => {
+        // App is initialized
       }
 
-      // Check for window.currentUser or wait for userLoaded event
       if (window.currentUser) {
-        console.log('User data already available:', window.currentUser)
         currentUser.value = window.currentUser
         currentUserId.value = window.currentUser.id
         updateUserProfile(window.currentUser)
         initializeApp()
       } else {
-        // Check localStorage for cached user data
         const cachedUser = localStorage.getItem('currentUser')
         if (cachedUser) {
           try {
@@ -671,16 +364,13 @@ export default {
             currentUser.value = window.currentUser
             currentUserId.value = window.currentUser.id
             updateUserProfile(window.currentUser)
-            console.log('Using cached user data:', window.currentUser)
             initializeApp()
           } catch (e) {
             console.error('Error parsing cached user data:', e)
           }
         }
-        // Listen for userLoaded event from authService
         const handleUserLoaded = () => {
           if (window.currentUser) {
-            console.log('User data loaded:', window.currentUser)
             currentUser.value = window.currentUser
             currentUserId.value = window.currentUser.id
             updateUserProfile(window.currentUser)
@@ -690,42 +380,31 @@ export default {
         
         window.addEventListener('userLoaded', handleUserLoaded)
         
-        // Cleanup listener on unmount
         onUnmounted(() => {
           window.removeEventListener('userLoaded', handleUserLoaded)
         })
       }
     })
     
-    // Provide setAlert method to global scope for child components
-    window.setAlert = setAlert
-    
     return {
       isLoadingActivities,
-      isLoadingMore,
-      hasMorePosts,
       showAlert,
       alertType,
       alertMessage,
       selectedActivity,
       currentUser,
-      currentUserId,
       userProfile,
       heroStats,
-      menuItems,
       activities,
-      suggestedUsers,
-      suggestedUsersLoaded,
-      shouldShowSuggestions,
       setAlert,
-      loadSuggestedUsers,
-      followUser,
-      unfollowUser,
       likeActivity,
       handleActivityShare,
       openActivityModal,
       scrollToTop,
-      loadMorePosts
+      feedData,
+      fetchNextPage,
+      hasNextPage,
+      isFetchingNextPage
     }
   }
 }

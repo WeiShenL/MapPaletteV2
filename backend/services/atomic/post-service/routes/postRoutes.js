@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
 const { verifyAuth, verifyOwnership, optionalAuth } = require('/app/shared/middleware/auth');
-const { validate, postIdSchema, userIdSchema, paginationSchema, createPostSchema, updatePostSchema } = require('/app/shared/middleware/validator');
+const { validate, postIdSchema, userIdSchema, userIDSchema, paginationSchema, createPostSchema, updatePostSchema } = require('/app/shared/middleware/validator');
 const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
 const { mapGenerationRateLimiter } = require('/app/shared/middleware/mapRateLimiter');
 const { asyncHandler } = require('/app/shared/middleware/errorHandler');
@@ -10,7 +10,7 @@ const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 // Public routes - Read operations (lenient rate limit)
 router.get('/allposts', lenientLimiter, optionalAuth, validate({ query: paginationSchema }), asyncHandler(postController.getAllPosts));
 router.get('/posts', lenientLimiter, optionalAuth, validate({ query: postIdSchema }), asyncHandler(postController.getPost));
-router.get('/users/:userID/posts', lenientLimiter, optionalAuth, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(postController.getUserPosts));
+router.get('/users/:userID/posts', lenientLimiter, optionalAuth, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(postController.getUserPosts));
 
 // Protected routes (requires authentication)
 // Create operation (create rate limit - 20/hour + map generation limit - 50/hour)
@@ -20,7 +20,7 @@ router.post(
   mapGenerationRateLimiter(),
   verifyAuth,
   verifyOwnership('userID'),
-  validate({ params: userIdSchema, body: createPostSchema }),
+  validate({ params: userIDSchema, body: createPostSchema }),
   asyncHandler(postController.createPost)
 );
 

@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const userController = require('../controllers/userController');
 const { verifyAuth, verifyOwnership } = require('/app/shared/middleware/auth');
-const { validate, userIdSchema, usernameSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { validate, userIDSchema, currentUserIDSchema, usernameSchema, paginationSchema } = require('/app/shared/middleware/validator');
 const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
 const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
@@ -26,11 +26,11 @@ const upload = multer({
 // Public routes - Read operations (lenient rate limit)
 router.get('/getallusers', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
 router.get('/all', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
-router.get('/getcondensed/:currentUserID', lenientLimiter, validate({ params: userIdSchema }), asyncHandler(userController.getCondensedUsers));
-router.get('/:userID', lenientLimiter, validate({ params: userIdSchema }), asyncHandler(userController.getUserById));
-router.get('/:userID/likedPosts', lenientLimiter, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(userController.getUserLikedPosts));
-router.get('/getfollowers/:userID', lenientLimiter, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowers));
-router.get('/following/:userID', lenientLimiter, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowing));
+router.get('/getcondensed/:currentUserID', lenientLimiter, validate({ params: currentUserIDSchema }), asyncHandler(userController.getCondensedUsers));
+router.get('/:userID', lenientLimiter, validate({ params: userIDSchema }), asyncHandler(userController.getUserById));
+router.get('/:userID/likedPosts', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserLikedPosts));
+router.get('/getfollowers/:userID', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowers));
+router.get('/following/:userID', lenientLimiter, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(userController.getUserFollowing));
 router.get('/leaderboard/all', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getUsersForLeaderboard));
 
 // Batch operations (moderate rate limit)
@@ -45,7 +45,7 @@ router.post(
   moderateLimiter,
   verifyAuth,
   verifyOwnership('userID'),
-  validate({ params: userIdSchema }),
+  validate({ params: userIDSchema }),
   upload.single('profilePicture'),
   asyncHandler(userController.uploadProfilePicture)
 );
@@ -55,7 +55,7 @@ router.put(
   moderateLimiter,
   verifyAuth,
   verifyOwnership('userID'),
-  validate({ params: userIdSchema, body: usernameSchema }),
+  validate({ params: userIDSchema, body: usernameSchema }),
   asyncHandler(userController.updateUsername)
 );
 
@@ -64,7 +64,7 @@ router.put(
   moderateLimiter,
   verifyAuth,
   verifyOwnership('userID'),
-  validate({ params: userIdSchema }),
+  validate({ params: userIDSchema }),
   asyncHandler(userController.updateProfilePicture)
 );
 
@@ -73,16 +73,16 @@ router.put(
   moderateLimiter,
   verifyAuth,
   verifyOwnership('userID'),
-  validate({ params: userIdSchema }),
+  validate({ params: userIDSchema }),
   asyncHandler(userController.updatePrivacySettings)
 );
 
 // Internal service routes (require service key) - Strict rate limit
-router.put('/:userID/points', strictLimiter, validate({ params: userIdSchema }), asyncHandler(userController.updateUserPoints));
-router.patch('/:userID/count', strictLimiter, validate({ params: userIdSchema }), asyncHandler(userController.updateUserCount));
+router.put('/:userID/points', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.updateUserPoints));
+router.patch('/:userID/count', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.updateUserCount));
 
 // Admin routes (require service key for now) - Strict rate limit
-router.delete('/:userID/delete', strictLimiter, validate({ params: userIdSchema }), asyncHandler(userController.deleteUser));
+router.delete('/:userID/delete', strictLimiter, validate({ params: userIDSchema }), asyncHandler(userController.deleteUser));
 router.put('/assignDefaultProfilePicture', strictLimiter, asyncHandler(userController.assignDefaultProfilePicture));
 
 module.exports = router;
