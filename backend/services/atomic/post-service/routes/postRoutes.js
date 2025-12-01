@@ -1,25 +1,48 @@
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
-const commentController = require('../controllers/commentController');
+const { verifyAuth, verifyOwnership, optionalAuth } = require('/app/shared/middleware/auth');
+const { validate, postIdSchema, userIdSchema, userIDSchema, paginationSchema, createPostSchema, updatePostSchema } = require('/app/shared/middleware/validator');
+const { moderateLimiter, lenientLimiter, strictLimiter, createLimiter } = require('/app/shared/middleware/rateLimiter');
+const { mapGenerationRateLimiter } = require('/app/shared/middleware/mapRateLimiter');
+const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
-// Post CRUD operations
-router.post('/create/:userID', postController.createPost);
-router.get('/posts', postController.getPost);
-router.put('/posts', postController.updatePost);
-router.delete('/posts', postController.deletePost);
+// Public routes - Read operations (lenient rate limit)
+router.get('/allposts', lenientLimiter, optionalAuth, validate({ query: paginationSchema }), asyncHandler(postController.getAllPosts));
+router.get('/posts', lenientLimiter, optionalAuth, validate({ query: postIdSchema }), asyncHandler(postController.getPost));
+router.get('/users/:userID/posts', lenientLimiter, optionalAuth, validate({ params: userIDSchema, query: paginationSchema }), asyncHandler(postController.getUserPosts));
 
-// Post retrieval operations
-router.get('/allposts', postController.getAllPosts);
-router.get('/users/:userID/posts', postController.getUserPosts);
+// Protected routes (requires authentication)
+// Create operation (create rate limit - 20/hour + map generation limit - 50/hour)
+router.post(
+  '/create/:userID',
+  createLimiter,
+  mapGenerationRateLimiter(),
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema, body: createPostSchema }),
+  asyncHandler(postController.createPost)
+);
 
-// Comment operations
-router.post('/posts/:postId/comments', commentController.createComment);
-router.get('/posts/:postId/comments', commentController.getComments);
-router.put('/posts/:postId/comments/:commentId', commentController.updateComment);
-router.delete('/posts/:postId/comments/:commentId', commentController.deleteComment);
+// Update operation (moderate rate limit)
+router.put(
+  '/posts',
+  moderateLimiter,
+  verifyAuth,
+  validate({ body: updatePostSchema }),
+  asyncHandler(postController.updatePost)
+);
 
-// Update interaction counts (for Interaction Service)
-router.patch('/posts/:id/count', postController.updateInteractionCount);
+// Delete operation (strict rate limit)
+router.delete(
+  '/posts',
+  strictLimiter,
+  verifyAuth,
+  validate({ query: postIdSchema }),
+  asyncHandler(postController.deletePost)
+);
+
+// Internal service route (requires service key) - Strict rate limit
+router.patch('/posts/:id/count', strictLimiter, validate({ params: { id: postIdSchema.shape.postId } }), asyncHandler(postController.updateInteractionCount));
 
 module.exports = router;

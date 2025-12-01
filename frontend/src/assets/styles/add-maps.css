@@ -1,10 +1,12 @@
 .alert {
   position: fixed;
-  /* top: 76px; Match navbar height */
-  left: 0;
-  width: 100%;
-  z-index: 1020; 
-  border-radius: 0;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 300px;
+  max-width: 600px;
+  z-index: 1020;
+  border-radius: 4px;
 }
 
 .row {

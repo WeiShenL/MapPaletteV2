@@ -246,13 +246,13 @@ import { useRouter, useRoute } from 'vue-router'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { userProfile } from '@/services/authService'
-import { auth } from '@/config/firebase'
-import { onAuthStateChanged } from 'firebase/auth'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import html2canvas from 'html2canvas'
-import { getStorage, ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage'
+import { uploadBase64Image, BUCKETS } from '@/lib/storage'
+import { captureMap } from '@/utils/mapCapture'
 import * as bootstrap from 'bootstrap'
 
 export default {
@@ -312,24 +312,22 @@ export default {
     const descriptionLength = computed(() => postDescription.value.length)
     const isSubmitDisabled = computed(() => descriptionLength.value >= maxDescriptionLength.value)
     
-    // Load Google Maps API key from environment or external service
+    // Load Google Maps API key from environment
     const loadGoogleMapsScript = async () => {
       try {
-        // Try to use environment variable first
-        if (import.meta.env.VITE_GOOGLE_MAPS_API_KEY && import.meta.env.VITE_GOOGLE_MAPS_API_KEY !== 'your_google_maps_api_key_here') {
-          mapsApiKey.value = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
-        } else {
-          // Fallback to external service
-          const response = await fetch('https://app-907670644284.us-central1.run.app/getGoogleMapsApiKey')
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-          const data = await response.json()
-          mapsApiKey.value = data.apiKey
+        // Use environment variable for API key
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+
+        if (!apiKey || apiKey.startsWith('your')) {
+          throw new Error('Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY in .env file.')
         }
-        
-        // Dynamically load Google Maps script
+
+        mapsApiKey.value = apiKey
+
+        // Dynamically load Google Maps script with marker library for Advanced Markers
         return new Promise((resolve, reject) => {
           const script = document.createElement('script')
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places`
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places,marker`
           script.async = true
           script.defer = true
           script.onload = resolve
@@ -337,13 +335,17 @@ export default {
           document.body.appendChild(script)
         })
       } catch (error) {
-        console.error('Error fetching API key:', error)
+        console.error('Error loading Google Maps:', error)
+        setAlert('error', 'Could not load Google Maps API. Please make sure VITE_GOOGLE_MAPS_API_KEY is set in your .env file.')
       }
     }
     
     // Initialize Google Maps
     const initMap = () => {
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+
       map.value = new google.maps.Map(document.getElementById("map"), {
+        mapId: mapId, // Required for Advanced Markers API (google.maps.Marker deprecated Feb 2024)
         zoom: 18,
         center: { lat: 1.36241, lng: 103.82606 }, // Singapore's coordinates
         mapTypeId: "roadmap",
@@ -461,24 +463,26 @@ export default {
       })
     }
     
-    // Add marker to map
+    // Add marker to map using Advanced Markers API (google.maps.Marker deprecated Feb 2024)
     const addMarker = (latLng) => {
       const markerIndex = waypoints.value.length
 
-      const marker = new google.maps.Marker({
-        map: map.value,
-        position: latLng,
-        animation: google.maps.Animation.DROP,
+      // Create pin element with label
+      const pinBackground = new google.maps.marker.PinElement({
+        background: '#FF6B6B',
+        borderColor: '#FFFFFF',
+        glyphColor: '#FFFFFF',
+        glyph: `${markerIndex}`,
+        scale: 1.2
       })
 
-      setTimeout(() => {
-        marker.setLabel({
-          text: `${markerIndex}`,
-          color: "black",
-          fontSize: "14px",
-          fontWeight: "bold"
-        })
-      }, 300)
+      // Create advanced marker
+      const marker = new google.maps.marker.AdvancedMarkerElement({
+        map: map.value,
+        position: latLng,
+        content: pinBackground.element,
+        title: `Waypoint ${markerIndex}`
+      })
 
       markers.value.push(marker)
     }
@@ -486,29 +490,37 @@ export default {
     // Remove waypoint
     const removeWaypoint = (index) => {
       if (isDeleting.value) return
-      
+
       isDeleting.value = true
-      
+
       waypoints.value[index].isFilling = true
       waypoints.value.splice(index, 1)
-      
+
       const marker = markers.value[index]
       if (marker) {
-        marker.setMap(null)
-        marker.setVisible(false)
+        // Advanced Markers use property assignment instead of methods
+        marker.map = null
       }
-      
+
       markers.value.splice(index, 1)
       calculateAndDisplayRoute()
       updateMarkerLabels()
-      
+
       isDeleting.value = false
     }
     
-    // Update marker labels after removal
+    // Update marker labels after removal (for Advanced Markers)
     const updateMarkerLabels = () => {
       markers.value.forEach((marker, index) => {
-        marker.setLabel(`${index + 1}`)
+        // Recreate pin element with updated label
+        const pinBackground = new google.maps.marker.PinElement({
+          background: '#FF6B6B',
+          borderColor: '#FFFFFF',
+          glyphColor: '#FFFFFF',
+          glyph: `${index + 1}`,
+          scale: 1.2
+        })
+        marker.content = pinBackground.element
       })
     }
     
@@ -574,17 +586,16 @@ export default {
     // Clear map
     const clearMap = (showAlertMessage = true) => {
       for (let marker of markers.value) {
-        marker.setVisible(false)
-        marker.setMap(null)
-        marker.setPosition(null)
+        // Advanced Markers use property assignment
+        marker.map = null
       }
       markers.value = []
-      
+
       waypoints.value = []
       clearRoute()
       const input = document.getElementById("pac-input")
       if (input) input.value = ''
-      
+
       if (showAlertMessage) {
         setAlert('success', 'Route cleared successfully.')
       }
@@ -670,7 +681,7 @@ export default {
         const firstWaypoint = waypoints.value[0].location
         region.value = await getTownName(firstWaypoint.lat, firstWaypoint.lng)
 
-        // Capture map as image and upload to Firebase Storage
+        // Capture map as image and upload to Supabase Storage
         const postIdForImage = Date.now()
         await captureMapAsImage(postIdForImage)
 
@@ -717,86 +728,32 @@ export default {
       setAlert('success', 'Post cleared successfully.')
     }
     
-    // Capture map as image and upload to Firebase Storage
+    // Capture map as image and upload to Supabase Storage
+    // Uses improved capture methods that keep waypoint markers visible
     const captureMapAsImage = async (postId) => {
-      let originalControls
-      
       try {
-        // Hide markers temporarily for a clean capture
-        markers.value.forEach(marker => marker.setVisible(false))
-        
-        const mapContainer = document.getElementById("map")
-        
-        // Save original dimensions
-        const originalHeight = mapContainer.style.height
-        const originalWidth = mapContainer.style.width
-        
-        // Set dimensions to optimize for homepage display (300px height with object-fit: cover)
-        // Use a fixed 600x300 size for consistent, crisp images on homepage
-        const targetWidth = 686
-        const targetHeight = 506
-        
-        // Set the map to fixed dimensions for consistent homepage display
-        mapContainer.style.width = `${targetWidth}px`
-        mapContainer.style.height = `${targetHeight}px`
-        
-        // Define bounds based on waypoints
-        const bounds = new google.maps.LatLngBounds()
-        waypoints.value.forEach(point => bounds.extend(new google.maps.LatLng(point.location.lat, point.location.lng)))
-        
-        // Apply bounds with extra padding
-        map.value.fitBounds(bounds, { top: 80, right: 80, bottom: 80, left: 80 })
-        
-        // Temporarily disable controls and store original settings
-        originalControls = {
-          zoomControl: map.value.get('zoomControl'),
-          fullscreenControl: map.value.get('fullscreenControl'),
-          streetViewControl: map.value.get('streetViewControl'),
-          mapTypeControl: map.value.get('mapTypeControl')
-        }
-        map.value.setOptions({
-          zoomControl: false,
-          fullscreenControl: false,
-          streetViewControl: false,
-          mapTypeControl: false
+        console.log('📸 Capturing map with visible markers...')
+
+        // Use the new captureMap utility which automatically tries:
+        // 1. Google Static Maps API (best quality, automatic markers)
+        // 2. Falls back to improved html2canvas (keeps markers visible)
+        const imageUrl = await captureMap({
+          waypoints: waypoints.value,
+          color: currentColor.value,
+          apiKey: mapsApiKey.value,
+          userId: userID.value,
+          postId,
+          map: map.value,
+          markers: markers.value
         })
-        
-        // Allow the map to adjust before capture
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // Adjust zoom level if necessary
-        const currentZoom = map.value.getZoom()
-        map.value.setZoom(currentZoom - 1)
-        await new Promise(resolve => setTimeout(resolve, 300))
-        
-        // Capture the map view as an image with html2canvas
-        const canvas = await html2canvas(mapContainer, {
-          useCORS: true,
-          allowTaint: false,
-          backgroundColor: "#ffffff"
-        })
-        
-        const imageData = canvas.toDataURL("image/png")
-        
-        // Upload the captured image to Firebase
-        const imageRef = storageRef(storage.value, `maps_created/${postId}.png`)
-        await uploadString(imageRef, imageData, 'data_url')
-        image.value = await getDownloadURL(imageRef)
-        
-        // Reset the map container to its original dimensions
-        mapContainer.style.height = originalHeight
-        mapContainer.style.width = originalWidth
-        
+
+        image.value = imageUrl
+        console.log('✅ Map captured successfully with markers visible')
+
       } catch (error) {
-        console.error("Error capturing map as image:", error)
-      } finally {
-        // Restore original controls
-        if (originalControls) {
-          map.value.setOptions(originalControls)
-        }
-        
-        // Show markers again after capture
-        markers.value.forEach(marker => marker.setVisible(true))
+        console.error('❌ Error capturing map:', error)
+        setAlert('error', 'Failed to capture map image. Please try again.')
+        throw error
       }
     }
     
@@ -880,23 +837,24 @@ export default {
       if (marker && marker.bounceInterval) {
         clearInterval(marker.bounceInterval)
         marker.bounceInterval = null
-        marker.setPosition(marker.originalPosition)
+        marker.position = marker.originalPosition
       }
     }
-    
+
     const bounceMarker = (marker) => {
       const bounceHeight = 0.00015
       const bounceSpeed = 300
       let direction = 1
 
-      marker.originalPosition = marker.getPosition()
+      // Advanced Markers use position property directly
+      marker.originalPosition = { lat: marker.position.lat, lng: marker.position.lng }
 
       marker.bounceInterval = setInterval(() => {
-        const position = marker.getPosition()
-        const newLat = position.lat() + (bounceHeight * direction)
+        const position = marker.position
+        const newLat = position.lat + (bounceHeight * direction)
         direction *= -1
 
-        marker.setPosition(new google.maps.LatLng(newLat, position.lng()))
+        marker.position = { lat: newLat, lng: position.lng }
       }, bounceSpeed)
     }
     
@@ -1032,7 +990,7 @@ export default {
         const firstWaypoint = waypoints.value[0].location
         region.value = await getTownName(firstWaypoint.lat, firstWaypoint.lng)
         
-        // Capture map as image and upload to Firebase Storage
+        // Capture map as image and upload to Supabase Storage
         await captureMapAsImage(postId.value)
         
         const response = await axios.put(`${POST_SERVICE_URL.value}/posts?id=${postId.value}`, {
@@ -1253,19 +1211,20 @@ export default {
     window.initMap = initMap
     
     onMounted(async () => {
-      // Initialize Firebase Storage
-      storage.value = getStorage()
-      
-      // Check authentication state
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          userID.value = user.uid
-          username.value = user.email || ''
-          
-          // Update userProfile if available
-          if (userProfile.value) {
-            username.value = userProfile.value.username || user.email || ''
-          }
+      // TODO: Initialize Supabase Storage
+      // storage.value = getStorage()
+
+      // Check authentication state using Supabase
+      const { currentUser } = useAuth()
+
+      if (currentUser.value) {
+        userID.value = currentUser.value.id
+        username.value = currentUser.value.email || ''
+
+        // Update userProfile if available
+        if (userProfile.value) {
+          username.value = userProfile.value.username || currentUser.value.email || ''
+        }
           
           // Check if editing existing post
           postId.value = route.query.id || null
@@ -1281,11 +1240,10 @@ export default {
               await fetchMapData()
             }, 1000)
           }
-        } else {
-          // Redirect to login if not authenticated
-          router.push('/login')
-        }
-      })
+      } else {
+        // Redirect to login if not authenticated
+        router.push('/login')
+      }
     })
     
     return {

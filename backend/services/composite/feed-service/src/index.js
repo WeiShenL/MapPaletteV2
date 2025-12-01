@@ -5,22 +5,39 @@ const path = require('path');
 // Load environment variables from backend/.env
 require('dotenv').config({ path: path.resolve(__dirname, '../../../../.env') });
 
+// Import shared middleware and utilities
+const { requestId } = require('/app/shared/middleware/requestId');
+const { httpLogger, logger } = require('/app/shared/utils/logger');
+const { errorHandler, notFoundHandler } = require('/app/shared/middleware/errorHandler');
+const { createSwaggerConfig } = require('/app/shared/utils/swagger');
+
 const feedRoutes = require('../routes/feedRoutes');
+
+// Swagger configuration
+const swagger = createSwaggerConfig({
+  serviceName: 'Feed Service',
+  version: '1.0.0',
+  description: 'Feed API - aggregates posts from followed users for personalized feed',
+  port: process.env.PORT || 3004,
+  apis: [path.join(__dirname, '../routes/*.js')],
+});
 
 const app = express();
 const PORT = process.env.PORT || 3004;
 const startTime = Date.now();
 
 // Middleware
+app.use(requestId);
+app.use(httpLogger);
 app.use(cors());
 app.use(express.json());
 
-// Routes
-app.use('/api/feed', feedRoutes);
+// API Documentation
+app.use('/api-docs', swagger.serve, swagger.setup);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     status: 'healthy',
     service: 'feed-service',
     version: '1.0.0',
@@ -35,17 +52,38 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+// Routes
+app.use('/api/feed', feedRoutes);
+
+// 404 handler
+app.use(notFoundHandler);
+
+// Centralized error handling
+app.use(errorHandler);
+
+// Graceful shutdown
+const server = app.listen(PORT, () => {
+  logger.info(`Feed Composite Service running on port ${PORT}`);
+  logger.info('Connected services:', {
+    postService: process.env.POST_SERVICE_URL || 'http://localhost:3002',
+    userService: process.env.USER_SERVICE_URL || 'http://localhost:3001',
+    interactionService: process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003',
+    followService: process.env.FOLLOW_SERVICE_URL || 'http://localhost:3007'
+  });
 });
 
-app.listen(PORT, () => {
-  console.log(`Feed Composite Service running on port ${PORT}`);
-  console.log('Connected services:');
-  console.log(`- Post Service: ${process.env.POST_SERVICE_URL || 'http://localhost:3002'}`);
-  console.log(`- User Service: ${process.env.USER_SERVICE_URL || 'http://localhost:3001'}`);
-  console.log(`- Interaction Service: ${process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003'}`);
-  console.log(`- Follow Service: ${process.env.FOLLOW_SERVICE_URL || 'http://localhost:3007'}`);
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, closing server gracefully');
+  server.close(() => {
+    logger.info('Server closed');
+    process.exit(0);
+  });
 });

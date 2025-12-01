@@ -7,30 +7,14 @@
     <div v-show="!isLoading" id="app-container">
       <!-- Navbar -->
       <NavBar :user-profile="userProfile" />
-      
-      <!-- Alert -->
-      <div 
-        class="alert alert-dismissible fade" 
-        :class="{
-          'alert-warning': alertType === 'error', 
-          'alert-success': alertType === 'success', 
-          'show': showAlert
-        }"
-        :hidden="hidden" 
-        role="alert"
-      >
-        <!-- Icons for Error or Success -->
-        <svg v-if="alertType === 'error'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-          <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
-        </svg>
-        <svg v-if="alertType === 'success'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16">
-          <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-        </svg>
-        <!-- Alert Message -->
-        {{ alertMessage }}
-        <!-- Close Button -->
-        <button type="button" class="btn-close" @click="dismissAlert()"></button>
-      </div>
+
+      <!-- Alert Notification -->
+      <AlertNotification
+        :show="showAlert"
+        :type="alertType"
+        :message="alertMessage"
+        @update:show="showAlert = $event"
+      />
 
       <!-- Feed Header -->
       <header class="sample-header">
@@ -161,13 +145,10 @@
               </div>
             </div>
 
-            <!-- Modals -->
-            <RouteModals :routes="filteredRoutes" @alert="handleAlert" />
-
             <!-- Cards -->
             <div class="row mt-4" :style="{ opacity: isFilterLoading ? 0.6 : 1 }">
               <template v-if="filteredRoutes.length > 0">
-                <RouteCards :routes="filteredRoutes" />
+                <RouteCards :routes="normalizedRoutes" @open-modal="openRouteModal" />
               </template>
               <template v-else-if="!isFilterLoading">
                 <div class="text-center mt-4">
@@ -184,6 +165,17 @@
           </div>
         </div>
       </div>
+
+      <!-- Post Detail Modal -->
+      <PostDetailModal
+        v-if="selectedRoute"
+        :post="selectedRoute"
+        :current-user="currentUser"
+        @close="selectedRoute = null"
+        @like="handleRouteLike"
+        @share="handleRouteShare"
+        @alert="handleAlert"
+      />
 
       <!-- Back to Top Button -->
       <BackToTop />
@@ -202,9 +194,13 @@ import BackToTop from '@/components/common/BackToTop.vue';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import RouteCards from '@/components/routes/RouteCards.vue';
-import RouteModals from '@/components/routes/RouteModals.vue';
-import { auth } from '@/config/firebase';
+import PostDetailModal from '@/components/common/PostDetailModal.vue';
+import AlertNotification from '@/components/common/AlertNotification.vue';
+import { useAuth } from '@/composables/useAuth';
 import { routesService } from '@/services/routesService';
+import socialInteractionService from '@/services/socialInteractionService';
+import { normalizePosts } from '@/utils/postNormalizer';
+import { useAlert } from '@/composables/useAlert';
 
 export default {
   name: 'RoutesView',
@@ -214,31 +210,39 @@ export default {
     NavBar,
     SiteFooter,
     RouteCards,
-    RouteModals
+    PostDetailModal,
+    AlertNotification
   },
   setup() {
     const router = useRouter();
+    const { currentUser } = useAuth();
+
+    // Composables
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert();
+
+    // State
     const isLoading = ref(true);
     const isInitialLoad = ref(true);
     const isFilterLoading = ref(false);
     const filteredRoutes = ref([]);
+    const selectedRoute = ref(null);
     const currentPage = ref(1);
     const totalPages = ref(1);
     const hasMore = ref(false);
     const searchQuery = ref('');
     const searchInput = ref(null);
     const userProfile = ref(null);
-    const showAlert = ref(false);
-    const alertTimeout = ref(null);
-    const hidden = ref(true);
-    const alertType = ref('');
-    const alertMessage = ref('');
     const filters = ref({
       sortOption: 'Most Popular'
     });
 
     const activeFilters = computed(() => {
       return filters.value.sortOption ? [{ key: 'Sort By', value: filters.value.sortOption }] : [];
+    });
+
+    // Normalize routes to ensure consistent property names
+    const normalizedRoutes = computed(() => {
+      return normalizePosts(filteredRoutes.value);
     });
 
     const fetchRoutes = async (resetPage = false) => {
@@ -255,7 +259,7 @@ export default {
           isFilterLoading.value = true;
         }
         
-        const userId = auth.currentUser?.uid;
+        const userId = currentUser.value?.id;
         const sortByMap = {
           'Shortest': 'shortest',
           'Longest': 'longest',
@@ -321,40 +325,46 @@ export default {
       }
     };
 
-    const dismissAlert = () => {
-      showAlert.value = false;
-      setTimeout(() => {
-        hidden.value = true;
-        alertMessage.value = '';
-      }, 300);
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value);
-        alertTimeout.value = null;
-      }
-    };
-
-    const setAlert = (type, message) => {
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value);
-        alertTimeout.value = null;
-      }
-
-      hidden.value = false;
-      alertType.value = type;
-      alertMessage.value = message;
-
-      setTimeout(() => {
-        showAlert.value = true;
-      }, 10);
-
-      alertTimeout.value = setTimeout(() => {
-        dismissAlert();
-        alertTimeout.value = null;
-      }, 3000);
-    };
-
     const handleAlert = ({ type, message }) => {
       setAlert(type, message);
+    };
+
+    const openRouteModal = (route) => {
+      selectedRoute.value = route;
+    };
+
+    const handleRouteLike = async (route) => {
+      try {
+        const userId = currentUser.value?.id;
+        if (!userId) {
+          setAlert('error', 'Please login to like posts');
+          return;
+        }
+
+        if (route.isLiked) {
+          await socialInteractionService.unlikePost(route.id, userId);
+          route.isLiked = false;
+          route.likeCount = Math.max(0, (route.likeCount || 0) - 1);
+        } else {
+          await socialInteractionService.likePost(route.id, userId);
+          route.isLiked = true;
+          route.likeCount = (route.likeCount || 0) + 1;
+        }
+
+        // Update in the routes list
+        const routeIndex = filteredRoutes.value.findIndex(r => r.id === route.id || r.postID === route.id);
+        if (routeIndex !== -1) {
+          filteredRoutes.value[routeIndex].isLiked = route.isLiked;
+          filteredRoutes.value[routeIndex].likeCount = route.likeCount;
+        }
+      } catch (error) {
+        console.error('Error toggling like:', error);
+        setAlert('error', 'Failed to update like status');
+      }
+    };
+
+    const handleRouteShare = (route) => {
+      setAlert('success', 'Link copied to clipboard!');
     };
 
     let handleUserLoaded;
@@ -416,14 +426,10 @@ export default {
         
         window.addEventListener('userLoaded', handleUserLoaded);
         
-        // Fallback to auth state if no user data after a timeout
+        // Fallback to check auth state if no user data after a timeout
         setTimeout(() => {
-          if (!userProfile.value) {
-            auth.onAuthStateChanged((user) => {
-              if (user) {
-                router.push('/login');
-              }
-            });
+          if (!currentUser.value) {
+            router.push('/login');
           }
         }, 3000);
       }
@@ -439,12 +445,14 @@ export default {
       isLoading,
       isFilterLoading,
       filteredRoutes,
+      normalizedRoutes,
+      selectedRoute,
+      currentUser,
       hasMore,
       searchQuery,
       searchInput,
       userProfile,
       showAlert,
-      hidden,
       alertType,
       alertMessage,
       filters,
@@ -454,8 +462,10 @@ export default {
       resetFilters,
       clearSearch,
       loadMoreRoutes,
-      dismissAlert,
-      handleAlert
+      handleAlert,
+      openRouteModal,
+      handleRouteLike,
+      handleRouteShare
     };
   }
 };

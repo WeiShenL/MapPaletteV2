@@ -103,14 +103,13 @@
 </template>
 
 <script>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import axios from 'axios';
+import axios from '@/lib/axios';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
-import { auth, db } from '@/config/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { useAuth } from '@/composables/useAuth';
+import { useAlert } from '@/composables/useAlert';
 
 export default {
   name: 'CreatePostView',
@@ -120,9 +119,10 @@ export default {
   },
   setup() {
     const router = useRouter();
+    const { currentUser } = useAuth();
+    const { setAlert } = useAlert();
     const loading = ref(false);
     const error = ref('');
-    const currentUser = ref(null);
     const userProfile = ref(null);
     
     const postData = ref({
@@ -160,8 +160,8 @@ export default {
       try {
         loading.value = true;
         error.value = '';
-        
-        if (!auth.currentUser) {
+
+        if (!currentUser.value) {
           error.value = 'You must be logged in to create a post';
           return;
         }
@@ -169,17 +169,18 @@ export default {
         // Add username to the post data
         const postDataWithUsername = {
           ...postData.value,
-          username: userProfile.value?.username || 'Unknown User'
+          username: currentUser.value.username || currentUser.value.email || 'Unknown User'
         };
 
-        // Call the post service API
+        // Call the post service API (axios already has JWT interceptor)
+        const POST_SERVICE_URL = import.meta.env.VITE_POST_SERVICE_URL || 'http://localhost:3002';
         const response = await axios.post(
-          `http://localhost:3002/api/create/${auth.currentUser.uid}`,
+          `${POST_SERVICE_URL}/api/create/${currentUser.value.id}`,
           postDataWithUsername
         );
 
         if (response.data.id) {
-          alert('Post created successfully!');
+          setAlert('success', 'Post created successfully!');
           router.push('/homepage');
         }
       } catch (err) {
@@ -190,31 +191,10 @@ export default {
       }
     };
 
-    // Check auth on mount
-    onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        currentUser.value = user;
-        try {
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (userDoc.exists()) {
-            userProfile.value = {
-              ...userDoc.data(),
-              uid: user.uid,
-              avatar: userDoc.data().profilePicture || '/resources/default-profile.png'
-            };
-            
-            console.log('CreatePost - Logged in user:', {
-              uid: user.uid,
-              email: user.email,
-              username: userProfile.value.username,
-              displayName: user.displayName
-            });
-          }
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-        }
-      } else {
-        window.location.href = '/login';
+    // Check auth on mount (currentUser is reactive from useAuth)
+    onMounted(() => {
+      if (!currentUser.value) {
+        router.push('/login');
       }
     });
 

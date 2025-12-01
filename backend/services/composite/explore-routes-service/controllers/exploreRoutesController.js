@@ -116,48 +116,61 @@ const getAllRoutes = async (req, res) => {
     // Fetch all posts from post service
     const postsResponse = await axios.get(`${POST_SERVICE_URL}/allposts`);
     let posts = postsResponse.data;
-    
+
+    // Ensure posts is an array
+    if (!Array.isArray(posts)) {
+      if (posts && typeof posts === 'object' && posts.posts && Array.isArray(posts.posts)) {
+        posts = posts.posts;
+      } else if (posts && typeof posts === 'object' && posts.data && Array.isArray(posts.data)) {
+        posts = posts.data;
+      } else {
+        posts = [];
+      }
+    }
+
     // Search filter
-    if (search) {
+    if (search && Array.isArray(posts)) {
       const searchLower = search.toLowerCase();
-      posts = posts.filter(post => 
-        post.title.toLowerCase().includes(searchLower) ||
-        post.description.toLowerCase().includes(searchLower)
+      posts = posts.filter(post =>
+        post.title?.toLowerCase().includes(searchLower) ||
+        post.description?.toLowerCase().includes(searchLower)
       );
     }
     
     // Sort posts
-    switch (sortBy) {
-      case 'shortest':
-        posts.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-        break;
-      case 'longest':
-        posts.sort((a, b) => (b.distance || 0) - (a.distance || 0));
-        break;
-      case 'popularity':
-      case 'most-popular':
-        posts.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
-        break;
-      case 'least-popular':
-        posts.sort((a, b) => (a.likeCount || 0) - (b.likeCount || 0));
-        break;
-      case 'newest':
-        posts.sort((a, b) => {
-          const dateA = b.createdAt?._seconds ? new Date(b.createdAt._seconds * 1000) : new Date(b.createdAt);
-          const dateB = a.createdAt?._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
-          return dateA - dateB;
-        });
-        break;
-      case 'oldest':
-        posts.sort((a, b) => {
-          const dateA = a.createdAt?._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
-          const dateB = b.createdAt?._seconds ? new Date(b.createdAt._seconds * 1000) : new Date(b.createdAt);
-          return dateA - dateB;
-        });
-        break;
-      default:
-        // Default to most popular
-        posts.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+    if (Array.isArray(posts)) {
+      switch (sortBy) {
+        case 'shortest':
+          posts.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+          break;
+        case 'longest':
+          posts.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+          break;
+        case 'popularity':
+        case 'most-popular':
+          posts.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+          break;
+        case 'least-popular':
+          posts.sort((a, b) => (a.likeCount || 0) - (b.likeCount || 0));
+          break;
+        case 'newest':
+          posts.sort((a, b) => {
+            const dateA = b.createdAt?._seconds ? new Date(b.createdAt._seconds * 1000) : new Date(b.createdAt);
+            const dateB = a.createdAt?._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
+            return dateA - dateB;
+          });
+          break;
+        case 'oldest':
+          posts.sort((a, b) => {
+            const dateA = a.createdAt?._seconds ? new Date(a.createdAt._seconds * 1000) : new Date(a.createdAt);
+            const dateB = b.createdAt?._seconds ? new Date(b.createdAt._seconds * 1000) : new Date(b.createdAt);
+            return dateA - dateB;
+          });
+          break;
+        default:
+          // Default to most popular
+          posts.sort((a, b) => (b.likeCount || 0) - (a.likeCount || 0));
+      }
     }
     
     // Calculate pagination

@@ -1,15 +1,25 @@
-FROM node:18-alpine
+FROM node:22-alpine
+
+# Install OpenSSL and libc for Prisma
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
-# package files
-COPY package*.json ./
+# Copy entire backend monorepo (needed for npm workspaces)
+COPY backend/package*.json ./
+COPY backend/shared ./shared
+COPY backend/services ./services
 
-# install dependencies
-RUN npm ci --only=production
+# Install all workspace dependencies at once
+RUN npm ci
 
-# cpy app files
-COPY . .
+# Generate Prisma Client
+RUN npx prisma generate --schema=./shared/prisma/schema.prisma
 
-# start the application
-CMD ["node", "src/index.js"]
+# Set working directory to this specific service
+WORKDIR /app/services/atomic/follow-service
+
+EXPOSE 5000
+
+# npm start will run the script from package.json in current service
+CMD ["npm", "start"]

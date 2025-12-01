@@ -7,24 +7,14 @@
     <div v-show="!isLoading">
       <!-- Navbar -->
       <NavBar :user-profile="navProfile" />
-      
-      <!-- Alert -->
-      <div class="alert alert-dismissible fade" 
-          :class="{'alert-warning': alertType === 'error', 'alert-success': alertType === 'success', 'show': showAlert}"
-          :hidden="hidden" 
-          role="alert">
-          <!-- Icons for Error or Success -->
-          <svg v-if="alertType === 'error'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-exclamation-triangle-fill" viewBox="0 0 16 16">
-              <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2"/>
-          </svg>
-          <svg v-if="alertType === 'success'" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-check-circle-fill" viewBox="0 0 16 16">
-              <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-3.97-3.03a.75.75 0 0 0-1.08.022L7.477 9.417 5.384 7.323a.75.75 0 0 0-1.06 1.06L6.97 11.03a.75.75 0 0 0 1.079-.02l3.992-4.99a.75.75 0 0 0-.01-1.05z"/>
-          </svg>
-          <!-- Alert Message -->
-          {{ alertMessage }}
-          <!-- Close Button -->
-          <button type="button" class="btn-close" @click="dismissAlert()"></button>
-      </div>
+
+      <!-- Alert Notification -->
+      <AlertNotification
+        :show="showAlert"
+        :type="alertType"
+        :message="alertMessage"
+        @update:show="showAlert = $event"
+      />
 
       <!-- Profile Header Section -->
       <div class="main-content-wrapper">
@@ -195,15 +185,16 @@
           </div>
       </div>
 
-      <!-- Comment Modal -->
-      <CommentModal
+      <!-- Post Detail Modal -->
+      <PostDetailModal
           v-if="selectedActivity"
-          :activity="selectedActivity"
+          :post="selectedActivity"
+          :current-user="currentUserData"
           @close="selectedActivity = null"
           @like="likeActivity"
           @share="handleActivityShare"
           @alert="handleModalAlert">
-      </CommentModal>
+      </PostDetailModal>
 
       <!-- Back to top button -->
       <BackToTop />
@@ -220,12 +211,15 @@ import { useRoute, useRouter } from 'vue-router'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import ActivityCard from '@/components/homepage/ActivityCard.vue'
-import CommentModal from '@/components/homepage/CommentModal.vue'
+import PostDetailModal from '@/components/common/PostDetailModal.vue'
 import BackToTop from '@/components/common/BackToTop.vue'
 import LoadingQuotes from '@/components/common/LoadingQuotes.vue'
+import AlertNotification from '@/components/common/AlertNotification.vue'
 import followService from '@/services/followService.js'
 import profileService from '@/services/profileService.js'
 import socialInteractionService from '@/services/socialInteractionService.js'
+import { calculateTimeSince } from '@/utils/dateFormatter'
+import { useAlert } from '@/composables/useAlert'
 
 export default {
   name: 'ProfileView',
@@ -233,13 +227,17 @@ export default {
     NavBar,
     SiteFooter,
     ActivityCard,
-    CommentModal,
+    PostDetailModal,
     BackToTop,
-    LoadingQuotes
+    LoadingQuotes,
+    AlertNotification
   },
   setup() {
     const route = useRoute()
     const router = useRouter()
+
+    // Composables
+    const { showAlert, alertType, alertMessage, setAlert } = useAlert()
 
     // Reactive data
     const isLoading = ref(true)
@@ -247,11 +245,6 @@ export default {
     const followLoading = ref(false)
     const currentTab = ref('activities')
     const selectedActivity = ref(null)
-    const showAlert = ref(false)
-    const alertType = ref('')
-    const alertMessage = ref('')
-    const hidden = ref(true)
-    const alertTimeout = ref(null)
     const lastApiCallTime = ref(0)
 
     const currentUser = ref({
@@ -294,37 +287,6 @@ export default {
     })
 
     // Methods
-    const setAlert = (type, message) => {
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value)
-        alertTimeout.value = null
-      }
-
-      hidden.value = false
-      alertType.value = type
-      alertMessage.value = message
-
-      setTimeout(() => {
-        showAlert.value = true
-      }, 10)
-
-      alertTimeout.value = setTimeout(() => {
-        dismissAlert()
-        alertTimeout.value = null
-      }, 3000)
-    }
-
-    const dismissAlert = () => {
-      showAlert.value = false
-      setTimeout(() => {
-        hidden.value = true
-        alertMessage.value = ''
-      }, 300)
-      if (alertTimeout.value) {
-        clearTimeout(alertTimeout.value)
-        alertTimeout.value = null
-      }
-    }
 
     const loadUserProfile = async (userId) => {
       try {
@@ -460,40 +422,6 @@ export default {
       } finally {
         followLoading.value = false
       }
-    }
-
-    const calculateTimeSince = (dateObj) => {
-      if (!dateObj) return 'Just now'
-
-      let date
-      if (dateObj._seconds) {
-        date = new Date(dateObj._seconds * 1000)
-      } else if (typeof dateObj === 'string' || dateObj instanceof Date) {
-        date = new Date(dateObj)
-      } else {
-        return 'Just now'
-      }
-
-      const now = new Date()
-      const diffInSeconds = Math.floor((now - date) / 1000)
-      const intervals = [
-        { label: 'year', seconds: 31536000 },
-        { label: 'month', seconds: 2592000 },
-        { label: 'day', seconds: 86400 },
-        { label: 'hour', seconds: 3600 },
-        { label: 'minute', seconds: 60 },
-        { label: 'second', seconds: 1 }
-      ]
-
-      for (const interval of intervals) {
-        const count = Math.floor(diffInSeconds / interval.seconds)
-        if (count >= 1) {
-          return count === 1 
-            ? `1 ${interval.label} ago` 
-            : `${count} ${interval.label}s ago`
-        }
-      }
-      return 'Just now'
     }
 
     const useRouteFunction = (routeId) => {
@@ -635,20 +563,18 @@ export default {
       showAlert,
       alertType,
       alertMessage,
-      hidden,
       currentUser,
       navProfile,
       userProfile,
       activities,
       routes,
-      
+
       // Computed
       profileUserId,
       isCurrentUserProfile,
-      
+
       // Methods
       setAlert,
-      dismissAlert,
       toggleFollow,
       useRouteFunction,
       openActivityModal,

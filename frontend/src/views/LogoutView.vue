@@ -16,8 +16,7 @@
 import { onMounted } from 'vue'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
-import { auth } from '@/config/firebase'
-import { signOut } from 'firebase/auth'
+import { useAuth } from '@/composables/useAuth'
 
 export default {
   name: 'LogoutView',
@@ -26,15 +25,21 @@ export default {
     SiteFooter
   },
   setup() {
+    const { logout } = useAuth()
+
     onMounted(async () => {
       // Logout the user
       try {
-        await signOut(auth)
-        console.log('User logged out')
+        const result = await logout()
+        if (result.success) {
+          console.log('User logged out')
+        } else {
+          console.error('Error logging out:', result.error)
+        }
       } catch (error) {
         console.error('Error logging out:', error)
       }
-      
+
       // Redirect to home page after a short delay
       setTimeout(() => {
         window.location.href = '/'
