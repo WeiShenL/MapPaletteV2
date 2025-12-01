@@ -5,21 +5,28 @@ RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
+# Copy root .env for Prisma configuration
+COPY .env ./
+
 # Copy entire backend monorepo (needed for npm workspaces)
 COPY backend/package*.json ./
 COPY backend/shared ./shared
 COPY backend/services ./services
 
-# Install all workspace dependencies at once
-RUN npm ci
+# Copy entrypoint script
+COPY backend/shared/docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Generate Prisma Client
-RUN npx prisma generate --schema=./shared/prisma/schema.prisma
+# Install all workspace dependencies at once
+# Skip Prisma postinstall during npm install to avoid network issues
+ENV PRISMA_SKIP_POSTINSTALL_GENERATE=true
+ENV NODE_PATH=/app/node_modules
+RUN npm install --production=false || npm install --production=false || npm install --production=false
 
 # Set working directory to this specific service
 WORKDIR /app/services/atomic/user-service
 
 EXPOSE 5000
 
-# npm start will run the script from package.json in current service
-CMD ["npm", "start"]
+# Use entrypoint script that generates Prisma Client before starting
+ENTRYPOINT ["docker-entrypoint.sh"]

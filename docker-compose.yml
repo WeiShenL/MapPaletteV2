@@ -161,7 +161,6 @@ services:
       KONG_DATABASE: 'off'
       KONG_DECLARATIVE_CONFIG: /usr/local/kong/kong.yml
       KONG_DNS_ORDER: LAST,A,CNAME
-      KONG_PLUGINS: request-transformer,cors,key-auth,acl
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
     volumes:
@@ -250,38 +249,10 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
 
   # ====================
-  # PRISMA INIT SERVICE
-  # ====================
-  # Runs migrations and generates Prisma client before services start
-
-  prisma-init:
-    build:
-      context: .
-      dockerfile: ./backend/services/atomic/user-service/Dockerfile
-    container_name: mappalette-prisma-init
-    restart: "no"
-    depends_on:
-      supabase-db:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
-    networks:
-      - mappalette-network
-    working_dir: /app
-    command: >
-      sh -c "
-      echo 'Waiting for database migrations...' &&
-      npx prisma migrate deploy --schema=/app/shared/prisma/schema.prisma &&
-      echo 'Generating Prisma client...' &&
-      npx prisma generate --schema=/app/shared/prisma/schema.prisma &&
-      echo 'Prisma initialization complete!'
-      "
-
-  # ====================
   # ATOMIC SERVICES
   # ====================
+  # Migrations are run via: npm run db:migrate (see package.json)
+  # Prisma client is generated during service build time
 
   user-service:
     build:
@@ -290,8 +261,6 @@ services:
     container_name: mappalette-user-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -316,8 +285,6 @@ services:
     container_name: mappalette-post-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -342,8 +309,6 @@ services:
     container_name: mappalette-interaction-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -369,8 +334,6 @@ services:
     container_name: mappalette-follow-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -400,8 +363,8 @@ services:
     container_name: mappalette-feed-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       user-service:
         condition: service_started
       post-service:
@@ -435,8 +398,8 @@ services:
     container_name: mappalette-profile-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       user-service:
         condition: service_started
       post-service:
@@ -464,8 +427,8 @@ services:
     container_name: mappalette-social-interaction-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       interaction-service:
         condition: service_started
       follow-service:
@@ -493,8 +456,8 @@ services:
     container_name: mappalette-explore-routes-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       post-service:
         condition: service_started
       user-service:
@@ -522,8 +485,8 @@ services:
     container_name: mappalette-leaderboard-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       user-service:
         condition: service_started
     ports:
@@ -538,8 +501,6 @@ services:
       - USER_SERVICE_URL=http://user-service:5000
     networks:
       - mappalette-network
-    volumes:
-      - ./backend/shared:/app/shared:ro
 
   user-discovery-service:
     build:
@@ -548,8 +509,8 @@ services:
     container_name: mappalette-user-discovery-service
     restart: unless-stopped
     depends_on:
-      prisma-init:
-        condition: service_completed_successfully
+      supabase-db:
+        condition: service_healthy
       user-service:
         condition: service_started
       follow-service:
@@ -567,8 +528,6 @@ services:
       - FOLLOW_SERVICE_URL=http://follow-service:5000
     networks:
       - mappalette-network
-    volumes:
-      - ./backend/shared:/app/shared:ro
 
   # ====================
   # FRONTEND

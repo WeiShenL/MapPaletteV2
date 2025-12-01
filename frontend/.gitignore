@@ -1,7 +1,0 @@
-
-# Test artifacts and temporary test files
-build-test.log
-dev-server.log
-test-*.sh
-test-*.js
-verify-*.js

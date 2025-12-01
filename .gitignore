@@ -60,3 +60,16 @@ serviceAccountKey.json
 !backend/scripts/
 backend/scripts/migrate/data/
 /.claude
+
+# supabase
+backend/db/volumes/db/data
+backend/db/volumes/storage
+backend/db/test.http
+backend/db/docker-compose.override.yml
+
+# Test artifacts and temporary test files
+build-test.log
+dev-server.log
+test-*.sh
+test-*.js
+verify-*.js

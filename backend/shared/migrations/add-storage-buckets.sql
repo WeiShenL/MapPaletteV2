@@ -1,7 +1,0 @@
--- This script has been disabled because it conflicts with the Supabase storage service.
--- The Supabase storage service automatically manages the 'storage' schema,
--- including the 'buckets' and 'objects' tables.
--- Running this script manually can lead to permission errors and an inconsistent state.
---
--- The storage buckets will be created by the supabase/storage-api service.
--- You can manage buckets through the Supabase Studio or the storage API.

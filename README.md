@@ -24,30 +24,31 @@
 
 ## Quick Start
 
-> 📖 **For detailed setup instructions and troubleshooting**, see [SETUP_GUIDE.md](./SETUP_GUIDE.md)
-
 ### Prerequisites
 
 - Docker & Docker Compose (v2.0+)
 - 10GB free disk space
-- Node.js 18+ (optional, for local development)
+- Node.js 18+ (for running npm scripts)
 
-### Setup (5 Minutes)
+### Setup (3 Steps)
 
 ```bash
-# Clone repository
+# 1. Clone repository
+git clone https://github.com/WeiShenL/MapPaletteV2.git
 cd MapPaletteV2
 
-# Validate prerequisites (optional)
-./scripts/validate-setup.sh
-
-# Copy and configure environment file
+# 2. Copy and configure environment file
 cp .env.example .env
 # Edit .env with your values (IMPORTANT: Change passwords and API keys!)
 
-# Run automated setup
-chmod +x setup.sh
-./setup.sh
+# 3. Run setup (starts Docker + runs database migrations)
+npm run setup
+```
+
+**That's it!** The full stack should be running. Watch logs with:
+
+```bash
+npm run dev
 ```
 
 ### Access Application
@@ -139,43 +140,49 @@ See **[development.md](./development.md)** for comprehensive documentation inclu
 
 See [development.md#deployment](./development.md#deployment) for complete guide.
 
-Quick deploy to VPS:
+Database migrations in production:
 
 ```bash
-./deploy.sh
+cd backend/shared
+npx prisma migrate deploy    # Deploy without creating new migrations
 ```
 
-## Commands
+## Common Commands
 
 ```bash
-# Start all services
-docker compose up -d
+# Setup & Initialization
+npm run setup              # Complete setup (Docker + migrations)
+npm run setup:db          # Just run migrations
+npm run setup:services    # Just start Docker services
 
-# View logs
-docker compose logs -f [service-name]
+# Development
+npm run dev               # Watch Docker logs
+npm run services:logs     # View all service logs
+npm run services:down     # Stop all services
 
-# Access database
-docker compose exec supabase-db psql -U postgres postgres
+# Database Management
+npm run db:status         # Check migration status
+npm run db:generate       # Regenerate Prisma client
+npm run db:reset          # Reset database (development only)
 
-# Run migrations
-cd backend/shared && npx prisma migrate dev
+# Service Management
+npm run services:up       # Start services
+npm run services:down     # Stop services
+npm run services:ps       # List running services
 
-# Generate Prisma client
-cd backend/shared && npx prisma generate
-
-# Backup database
-docker compose exec supabase-db pg_dump -U postgres postgres > backup.sql
-
-# Restore database
-docker compose exec -T supabase-db psql -U postgres postgres < backup.sql
+# Direct Docker commands
+docker compose logs -f [service-name]        # View logs
+docker compose exec supabase-db psql -U postgres postgres  # Access database
+docker compose exec supabase-db pg_dump -U postgres postgres > backup.sql  # Backup
 ```
 
 ## Documentation
 
-- **[SETUP_GUIDE.md](./SETUP_GUIDE.md)** - Complete setup guide with troubleshooting
+- **[DATABASE_SETUP_PLAN.md](./DATABASE_SETUP_PLAN.md)** - Technical database setup details
 - **[DOCKER_SETUP.md](./DOCKER_SETUP.md)** - Docker-specific setup instructions
 - **[.env.example](./.env.example)** - Environment configuration reference
 - **[backend/shared/prisma/schema.prisma](./backend/shared/prisma/schema.prisma)** - Database schema
+- **[development.md](./development.md)** - Comprehensive development guide
 
 ## License
 

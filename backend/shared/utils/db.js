@@ -13,14 +13,15 @@ const { PrismaClient } = require('@prisma/client');
  * - connect_timeout=5 (seconds)
  */
 const prismaClientSingleton = () => {
+  // Prisma 7 requires adapter for standard PostgreSQL connections
+  const { PrismaPg } = require('@prisma/adapter-pg');
+
+  const connectionString = process.env.DATABASE_URL;
+  const adapter = new PrismaPg({ connectionString });
+
   return new PrismaClient({
+    adapter,
     log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    // Connection pool configuration
-    datasources: {
-      db: {
-        url: process.env.DATABASE_URL,
-      },
-    },
   });
 };
 
