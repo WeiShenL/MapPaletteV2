@@ -31,12 +31,16 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
-      # Mount initialization SQL scripts (run in alphabetical order)
-      - ./supabase/volumes/db/init/00-initial-schema.sql:/docker-entrypoint-initdb.d/init-scripts/00-initial-schema.sql:Z
-      - ./supabase/volumes/db/init/01-roles.sql:/docker-entrypoint-initdb.d/init-scripts/01-roles.sql:Z
-      - ./supabase/volumes/db/init/02-storage.sql:/docker-entrypoint-initdb.d/init-scripts/02-storage.sql:Z
-      - ./supabase/volumes/db/init/03-realtime.sql:/docker-entrypoint-initdb.d/init-scripts/03-realtime.sql:Z
-      - ./supabase/volumes/db/init/99-roles.sql:/docker-entrypoint-initdb.d/init-scripts/99-roles.sql:Z
+      # Mount Supabase core database initialization scripts
+      - ./backend/db/volumes/db/_supabase.sql:/docker-entrypoint-initdb.d/migrations/00-_supabase.sql:Z
+      - ./backend/db/volumes/db/jwt.sql:/docker-entrypoint-initdb.d/migrations/01-jwt.sql:Z
+      - ./backend/db/volumes/db/logs.sql:/docker-entrypoint-initdb.d/migrations/02-logs.sql:Z
+      - ./backend/db/volumes/db/pooler.sql:/docker-entrypoint-initdb.d/migrations/03-pooler.sql:Z
+      - ./backend/db/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/04-realtime.sql:Z
+      - ./backend/db/volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/migrations/05-webhooks.sql:Z
+      - ./backend/db/volumes/db/roles.sql:/docker-entrypoint-initdb.d/migrations/99-roles.sql:Z
+      # Mount init directory for data scripts
+      - ./backend/db/volumes/db/init:/docker-entrypoint-initdb.d/init:Z
       - supabase-db-data:/var/lib/postgresql/data
     networks:
       - mappalette-network
@@ -249,6 +253,39 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
 
   # ====================
+  # PRISMA INIT SERVICE
+  # ====================
+  # Runs migrations and generates Prisma client before services start
+
+  prisma-init:
+    build:
+      context: .
+      dockerfile: ./backend/services/atomic/user-service/Dockerfile
+    container_name: mappalette-prisma-init
+    restart: "no"
+    depends_on:
+      supabase-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL="postgresql://postgres:ypnnht8749@supabase-db:5432/postgres"
+      - POSTGRES_PASSWORD=ypnnht8749
+      - POSTGRES_DB=postgres
+      - PRISMA_FORCE_NAPI=1
+    networks:
+      - mappalette-network
+    volumes:
+      - prisma-client-data:/app/node_modules/.prisma
+    working_dir: /app
+    command: >
+      sh -c "
+      echo 'Waiting for database migrations...' &&
+      npx prisma migrate deploy --schema=/app/shared/prisma/schema.prisma &&
+      echo 'Generating Prisma client...' &&
+      npx prisma generate --schema=/app/shared/prisma/schema.prisma &&
+      echo 'Prisma initialization complete!'
+      "
+
+  # ====================
   # ATOMIC SERVICES
   # ====================
   # Migrations are run via: npm run db:migrate (see package.json)
@@ -261,21 +298,25 @@ services:
     container_name: mappalette-user-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
         condition: service_healthy
     ports:
       - "${USER_SERVICE_PORT:-3001}:5000"
-    env_file:
-      - .env
     environment:
       - PORT=5000
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - DATABASE_URL="postgresql://postgres:ypnnht8749@supabase-db:5432/postgres"
+      - POSTGRES_PASSWORD=ypnnht8749
+      - POSTGRES_DB=postgres
       - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
+    volumes:
+      - prisma-client-data:/app/node_modules/.prisma
     working_dir: /app/services/atomic/user-service
 
   post-service:
@@ -285,6 +326,8 @@ services:
     container_name: mappalette-post-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -300,6 +343,8 @@ services:
       - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
+    volumes:
+      - prisma-client-data:/app/node_modules/.prisma
     working_dir: /app/services/atomic/post-service
 
   interaction-service:
@@ -309,6 +354,8 @@ services:
     container_name: mappalette-interaction-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
@@ -326,6 +373,7 @@ services:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   follow-service:
     build:
@@ -334,23 +382,17 @@ services:
     container_name: mappalette-follow-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    ports:
-      - "${FOLLOW_SERVICE_PORT:-3007}:5000"
-    env_file:
-      - .env
-    environment:
-      - PORT=5000
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   # ====================
   # COMPOSITE SERVICES
@@ -363,6 +405,8 @@ services:
     container_name: mappalette-feed-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       user-service:
@@ -390,6 +434,7 @@ services:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   profile-service:
     build:
@@ -398,6 +443,8 @@ services:
     container_name: mappalette-profile-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       user-service:
@@ -419,6 +466,7 @@ services:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   social-interaction-service:
     build:
@@ -427,6 +475,8 @@ services:
     container_name: mappalette-social-interaction-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       interaction-service:
@@ -448,6 +498,7 @@ services:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   explore-routes-service:
     build:
@@ -456,6 +507,8 @@ services:
     container_name: mappalette-explore-routes-service
     restart: unless-stopped
     depends_on:
+      prisma-init:
+        condition: service_completed_successfully
       supabase-db:
         condition: service_healthy
       post-service:
@@ -477,6 +530,7 @@ services:
       - mappalette-network
     volumes:
       - ./backend/shared:/app/shared:ro
+      - prisma-client-data:/app/node_modules/.prisma
 
   leaderboard-service:
     build:
@@ -493,14 +547,10 @@ services:
       - "${LEADERBOARD_SERVICE_PORT:-3009}:5000"
     env_file:
       - .env
-    environment:
-      - PORT=5000
-      - NODE_ENV=production
-      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379
-      - USER_SERVICE_URL=http://user-service:5000
     networks:
       - mappalette-network
+    volumes:
+      - prisma-client-data:/app/node_modules/.prisma
 
   user-discovery-service:
     build:
@@ -528,6 +578,8 @@ services:
       - FOLLOW_SERVICE_URL=http://follow-service:5000
     networks:
       - mappalette-network
+    volumes:
+      - prisma-client-data:/app/node_modules/.prisma
 
   # ====================
   # FRONTEND
@@ -617,3 +669,4 @@ volumes:
   caddy-data:
   caddy-config:
   caddy-logs:
+  prisma-client-data:

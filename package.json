@@ -1,14 +1,15 @@
+
 {
   "name": "mappalettev2",
   "version": "2.0.0",
   "description": "MapPaletteV2 - Social route mapping platform",
   "private": true,
   "scripts": {
-    "setup": "docker compose down -v && npm install && docker compose up -d --build supabase-db redis && docker compose up -d --build user-service && docker compose exec -T user-service sh -c \"cd /app/shared && npx prisma migrate deploy --schema prisma/schema.prisma\" && docker compose up -d",
-    "services:start": "docker compose up -d",
-    "services:stop": "docker compose down",
-    "services:logs": "docker compose logs -f",
-    "services:ps": "docker compose ps"
+    "setup": "docker compose down -v && npm install && docker compose up -d --build supabase-db redis && docker compose up -d --build prisma-init && docker compose up -d",
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
+    "ps": "docker compose ps"
   },
   "keywords": [
     "route",

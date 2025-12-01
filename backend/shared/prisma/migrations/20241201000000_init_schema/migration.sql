@@ -2,18 +2,8 @@
 -- Initial Schema Creation
 -- ============================================
 -- Creates all core application tables from scratch
+-- Note: auth schema and auth.users are created by Supabase init scripts
 -- ============================================
-
--- Ensure auth schema exists for Supabase Auth integration
-CREATE SCHEMA IF NOT EXISTS auth;
-
--- Create minimal auth.users table if it doesn't exist
--- (Supabase Auth service should create this, but we create it here as fallback)
-CREATE TABLE IF NOT EXISTS auth.users (
-  id uuid PRIMARY KEY,
-  email TEXT UNIQUE,
-  raw_user_meta_data jsonb
-);
 
 -- CreateTable users
 CREATE TABLE "users" (
