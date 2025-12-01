@@ -1,7 +1,6 @@
 // Prisma Schema for MapPaletteV2
 generator client {
   provider = "prisma-client-js"
-  output = "../../node_modules/.prisma/client"
 }
 
 datasource db {
