@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3008;
 const startTime = Date.now();
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: true, allowedHeaders: ['Content-Type', 'Authorization', 'x-supabase-api-version', 'apikey', 'x-client-info'] }));
 app.use(compression());
 app.use(morgan('dev'));
 app.use(express.json());

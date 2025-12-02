@@ -5,6 +5,7 @@ import com.mappalette.userdiscovery.client.UserServiceClient;
 import com.mappalette.userdiscovery.dto.AllUsersResponse;
 import com.mappalette.userdiscovery.dto.DiscoveryResponse;
 import com.mappalette.userdiscovery.dto.FollowingResponse;
+import com.mappalette.userdiscovery.dto.PaginatedUsersResponse;
 import com.mappalette.userdiscovery.dto.UserDto;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,7 @@ public class UserDiscoveryService {
     private final UserServiceClient userServiceClient;
     private final FollowServiceClient followServiceClient;
     
-    private static final String DEFAULT_PROFILE_PICTURE = "/resources/default-profile.png";
+    private static final String DEFAULT_PROFILE_PICTURE = "/resources/images/default-profile.png";
     
     public DiscoveryResponse discoverUsers(String userId, int limit, int offset, boolean suggestionsOnly) {
         log.info("Discovering users for userId: {}, limit: {}, offset: {}, suggestionsOnly: {}", 
@@ -32,7 +33,8 @@ public class UserDiscoveryService {
         
         try {
             // Step 1: Get all users from user service
-            List<UserDto> allUsers = userServiceClient.getAllUsers();
+            PaginatedUsersResponse response = userServiceClient.getAllUsers(1000);
+            List<UserDto> allUsers = response.getUsers() != null ? response.getUsers() : new ArrayList<>();
             log.info("Retrieved {} total users from user service", allUsers.size());
             
             // Step 2: Get the current user's following list
@@ -120,12 +122,13 @@ public class UserDiscoveryService {
         }
     }
     
-    public AllUsersResponse getAllUserData(String userId, int limit, int offset) {
-        log.info("Getting all user data for userId: {}, limit: {}, offset: {}", userId, limit, offset);
+    public AllUsersResponse getAllUserData(String userId, int friendsLimit, int othersLimit) {
+        log.info("Getting all user data for userId: {}, friendsLimit: {}, othersLimit: {}", userId, friendsLimit, othersLimit);
         
         try {
-            // Step 1: Get all users from user service
-            List<UserDto> allUsers = userServiceClient.getAllUsers();
+            // Step 1: Get all users from user service (max limit is 100)
+            PaginatedUsersResponse response = userServiceClient.getAllUsers(100);
+            List<UserDto> allUsers = response.getUsers() != null ? response.getUsers() : new ArrayList<>();
             log.info("Retrieved {} total users from user service", allUsers.size());
             
             // Step 2: Get the current user's following list
@@ -169,20 +172,17 @@ public class UserDiscoveryService {
             
             log.info("Found {} friends and {} other users", friends.size(), otherUsers.size());
             
-            // Step 4: Apply pagination to other users
-            int totalOtherUsers = otherUsers.size();
-            int fromIndex = Math.min(offset, totalOtherUsers);
-            int toIndex = Math.min(offset + limit, totalOtherUsers);
-            
-            List<UserDto> paginatedOtherUsers = otherUsers.subList(fromIndex, toIndex);
+            // Step 4: Apply limits to friends and other users
+            List<UserDto> limitedFriends = friends.stream().limit(friendsLimit).collect(Collectors.toList());
+            List<UserDto> limitedOtherUsers = otherUsers.stream().limit(othersLimit).collect(Collectors.toList());
             
             return AllUsersResponse.builder()
-                .friends(friends)
-                .otherUsers(paginatedOtherUsers)
+                .friends(limitedFriends)
+                .otherUsers(limitedOtherUsers)
                 .totalFriendsCount(friends.size())
-                .totalOtherUsersCount(totalOtherUsers)
-                .limit(limit)
-                .offset(offset)
+                .totalOtherUsersCount(otherUsers.size())
+                .limit(othersLimit)
+                .offset(0)
                 .build();
                 
         } catch (Exception e) {
@@ -193,8 +193,8 @@ public class UserDiscoveryService {
                 .otherUsers(new ArrayList<>())
                 .totalFriendsCount(0)
                 .totalOtherUsersCount(0)
-                .limit(limit)
-                .offset(offset)
+                .limit(othersLimit)
+                .offset(0)
                 .build();
         }
     }
@@ -203,7 +203,11 @@ public class UserDiscoveryService {
         try {
             FollowingResponse followingResponse = followServiceClient.getFollowing(userId);
             if (followingResponse != null && followingResponse.getFollowing() != null) {
-                return new HashSet<>(followingResponse.getFollowing());
+                // Extract IDs from the user objects
+                return followingResponse.getFollowing().stream()
+                    .map(FollowingResponse.FollowingUserDto::getId)
+                    .filter(id -> id != null)
+                    .collect(java.util.stream.Collectors.toSet());
             }
         } catch (Exception e) {
             log.warn("Could not retrieve following list for user {}: {}", userId, e.getMessage());

@@ -15,7 +15,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/discover")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "${cors.allowed-origins}")
+// CORS is handled by Caddy reverse proxy - removed @CrossOrigin to prevent duplicate headers
 @Slf4j
 public class UserDiscoveryController {
     

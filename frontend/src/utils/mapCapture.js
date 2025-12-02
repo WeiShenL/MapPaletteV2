@@ -67,10 +67,11 @@ export const captureWithStaticAPI = async (waypoints, color, apiKey, userId, pos
 /**
  * METHOD 2: Improved html2canvas (FALLBACK)
  * Keeps markers visible, auto-fits bounds, better quality
+ * Updated for Advanced Markers API (google.maps.marker.AdvancedMarkerElement)
  *
  * @param {Object} map - Google Maps instance
  * @param {Array} waypoints - Waypoints array
- * @param {Array} markers - Marker instances
+ * @param {Array} markers - Marker instances (AdvancedMarkerElement)
  * @param {string} userId - User ID
  * @param {string} postId - Post ID
  * @returns {Promise<string>} - Uploaded image URL
@@ -106,16 +107,21 @@ export const captureWithCanvas = async (map, waypoints, markers, userId, postId)
     // Fit bounds with padding
     map.fitBounds(bounds, 80)
 
-    // KEEP MARKERS VISIBLE with labels
+    // KEEP MARKERS VISIBLE - Advanced Markers use property assignment, not methods
     markers.forEach((marker, index) => {
-      marker.setVisible(true)
-      marker.setLabel({
-        text: String.fromCharCode(65 + index),
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: '16px'
+      // For Advanced Markers, ensure they're on the map
+      marker.map = map
+      
+      // Update pin content with label
+      const pinElement = new window.google.maps.marker.PinElement({
+        background: '#FF6B6B',
+        borderColor: '#FFFFFF',
+        glyphColor: '#FFFFFF',
+        glyph: String.fromCharCode(65 + index), // A, B, C, D...
+        scale: 1.2
       })
-      marker.setZIndex(1000 + index) // Ensure visibility
+      marker.content = pinElement.element
+      marker.zIndex = 1000 + index
     })
 
     // Disable controls for cleaner capture
@@ -163,21 +169,30 @@ export const captureWithCanvas = async (map, waypoints, markers, userId, postId)
     console.error('Canvas capture failed:', error)
     throw error
   } finally {
-    // Restore original state
-    if (originalState.height) {
+    // Restore original state - ALWAYS run this even if there's an error
+    try {
       const mapContainer = document.getElementById('map')
-      mapContainer.style.height = originalState.height
-      mapContainer.style.width = originalState.width
-      window.google.maps.event.trigger(map, 'resize')
+      if (originalState.height !== undefined) {
+        mapContainer.style.height = originalState.height || ''
+        mapContainer.style.width = originalState.width || ''
+        
+        // Trigger resize event
+        window.google.maps.event.trigger(map, 'resize')
 
-      map.setOptions(originalState.controls)
+        // Restore controls
+        if (originalState.controls) {
+          map.setOptions(originalState.controls)
+        }
 
-      // Restore bounds
-      const bounds = new window.google.maps.LatLngBounds()
-      waypoints.forEach(wp => {
-        bounds.extend(new window.google.maps.LatLng(wp.location.lat, wp.location.lng))
-      })
-      map.fitBounds(bounds, 50)
+        // Restore bounds
+        const bounds = new window.google.maps.LatLngBounds()
+        waypoints.forEach(wp => {
+          bounds.extend(new window.google.maps.LatLng(wp.location.lat, wp.location.lng))
+        })
+        map.fitBounds(bounds, 50)
+      }
+    } catch (restoreError) {
+      console.error('Error restoring map state:', restoreError)
     }
   }
 }

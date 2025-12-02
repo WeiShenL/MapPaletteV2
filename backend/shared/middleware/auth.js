@@ -1,9 +1,13 @@
 const { createClient } = require('@supabase/supabase-js');
 
+// Use internal Docker network URL for service-to-service communication
+const supabaseUrl = process.env.SUPABASE_INTERNAL_URL || 'http://supabase-kong:8000';
 const supabase = createClient(
-  process.env.SUPABASE_PUBLIC_URL || 'http://supabase-kong:8000',
+  supabaseUrl,
   process.env.SUPABASE_ANON_KEY
 );
+
+console.log('[AUTH] Supabase client configured with URL:', supabaseUrl);
 
 const verifyAuth = async (req, res, next) => {
   try {

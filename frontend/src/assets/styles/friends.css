@@ -93,6 +93,38 @@ body {
     transform: translateY(-2px);
 }
 
+.btn-outline-success {
+    border: 2px solid #198754;
+    color: #198754;
+    background: transparent;
+    border-radius: 25px;
+    padding: 0.5em 1.5em;
+    font-size: 1rem;
+    transition: background 0.3s, color 0.3s, transform 0.2s;
+}
+
+.btn-outline-success:hover {
+    background: #198754;
+    color: #fff;
+    transform: translateY(-2px);
+}
+
+.btn-outline-danger {
+    border: 2px solid #dc3545;
+    color: #dc3545;
+    background: transparent;
+    border-radius: 25px;
+    padding: 0.5em 1.5em;
+    font-size: 1rem;
+    transition: background 0.3s, color 0.3s, transform 0.2s;
+}
+
+.btn-outline-danger:hover {
+    background: #dc3545;
+    color: #fff;
+    transform: translateY(-2px);
+}
+
 .input-group .btn-primary {
     background-color: #FF8E53; /* Set your orange color here */
     border: none;
@@ -177,4 +209,68 @@ body {
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 150px;
+}
+
+/* Responsive friend columns - 5 on desktop, 3 on collapsed navbar */
+.friend-col {
+    flex: 0 0 20%;
+    max-width: 20%;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+/* Medium screens (tablet) - 3 columns */
+@media (max-width: 991.98px) {
+    .friend-col {
+        flex: 0 0 33.333%;
+        max-width: 33.333%;
+    }
+}
+
+/* Small screens - 2 columns */
+@media (max-width: 767.98px) {
+    .friend-col {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* Extra small screens - 1 column */
+@media (max-width: 575.98px) {
+    .friend-col {
+        flex: 0 0 100%;
+        max-width: 100%;
+    }
+}
+
+/* Friend card button styles */
+.friend-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.friend-actions .btn {
+    white-space: nowrap;
+}
+
+.friend-actions .btn-text {
+    margin-left: 4px;
+}
+
+/* Hide button text on smaller cards */
+@media (max-width: 1199.98px) {
+    .friend-actions .btn-text {
+        display: none;
+    }
+    
+    .friend-actions .btn {
+        padding: 0.375rem 0.5rem;
+    }
+}
+
+/* Show button text on larger screens */
+@media (min-width: 1200px) {
+    .friend-actions .btn-text {
+        display: inline;
+    }
 }

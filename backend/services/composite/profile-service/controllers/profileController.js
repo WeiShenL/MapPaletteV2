@@ -30,7 +30,9 @@ exports.getUserProfile = async (req, res) => {
       ]);
       
       user = userResponse.data;
-      userPosts = postsResponse.data || [];
+      // Handle both array response and object response with posts property
+      const postsData = postsResponse.data;
+      userPosts = Array.isArray(postsData) ? postsData : (postsData.posts || []);
     } catch (error) {
       // If user not found, return a default profile or error
       if (error.response && error.response.status === 404) {
@@ -49,9 +51,10 @@ exports.getUserProfile = async (req, res) => {
     if (currentUserId && currentUserId !== userId) {
       try {
         const followResponse = await axios.get(`${FOLLOW_SERVICE_URL}/check`, {
-          params: { followerUserId: currentUserId, followingUserId: userId }
+          params: { followerId: currentUserId, followingId: userId }
         });
-        followStatus = followResponse.data;
+        // Map 'following' from follow-service to 'isFollowing' for frontend
+        followStatus = { isFollowing: followResponse.data.following || false };
       } catch (error) {
         console.log(`[GET_PROFILE] Failed to get follow status for ${currentUserId} -> ${userId}`);
       }

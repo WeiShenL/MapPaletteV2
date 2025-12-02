@@ -139,7 +139,8 @@ const updateCommentSchema = z.object({
 
 // Follow schemas
 const followSchema = z.object({
-  userId: uuidSchema,
+  followerUserId: uuidSchema,
+  followingUserId: uuidSchema,
 });
 
 // Search schemas

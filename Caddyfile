@@ -1,11 +1,27 @@
 # Caddyfile for MapPaletteV2
 # Auto HTTPS with Let's Encrypt
-# Version: 2.0
+# Version: 2.1
 
 {
   email admin@{$DOMAIN:example.com}
   # Enable admin API for monitoring
   admin :2019
+}
+
+# Reusable reverse proxy snippet for API services
+(api_proxy) {
+  header_up X-Real-IP {remote_host}
+  header_up X-Forwarded-For {remote_host}
+  header_up X-Forwarded-Proto {scheme}
+  header_up X-Forwarded-Host {host}
+  # Reduce health check frequency for dev (30s instead of 10s)
+  health_interval 30s
+  health_timeout 5s
+  # Keep connections alive for better performance
+  transport http {
+    keepalive 30s
+    keepalive_idle_conns 10
+  }
 }
 
 # Global options for rate limiting
@@ -39,92 +55,115 @@
   }
 
   # If we get here and it's localhost, handle normally (same as localhost block below)
-  # CORS handling for all API requests - must be first to prevent redirects
-  @cors_preflight path /api/* && method OPTIONS
-  handle @cors_preflight {
-    header Access-Control-Allow-Origin "*"
-    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
-    header Access-Control-Allow-Headers "Content-Type, Authorization, X-Client-Info, X-Auth-Token"
-    header Access-Control-Max-Age "3600"
-    respond 204
-  }
-
-  # Apply CORS headers to all API responses
-  header /api/* {
-    Access-Control-Allow-Origin "*"
-    Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
-    Access-Control-Allow-Headers "Content-Type, Authorization, X-Client-Info, X-Auth-Token"
-    Access-Control-Max-Age "3600"
-  }
+  # CORS is handled by individual services - Caddy only forwards requests
 
   # API Routes - Microservices
   # User Service (port 5000)
   handle /api/users/* {
     reverse_proxy user-service:5000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-      header_up X-Forwarded-Host {host}
+      import api_proxy
       health_uri /health
-      health_interval 10s
-      health_timeout 5s
+      # Longer timeouts for file uploads
+      transport http {
+        read_timeout 60s
+        write_timeout 60s
+        keepalive 30s
+      }
     }
   }
 
   # Post Service (port 5000)
   handle /api/posts/* {
     reverse_proxy post-service:5000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-      header_up X-Forwarded-Host {host}
+      import api_proxy
       health_uri /health
-      health_interval 10s
-      health_timeout 5s
     }
   }
 
   # Interaction Service (port 5000)
   handle /api/interactions/* {
     reverse_proxy interaction-service:5000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-      header_up X-Forwarded-Host {host}
+      import api_proxy
       health_uri /health
-      health_interval 10s
-      health_timeout 5s
     }
   }
 
   # Follow Service (port 5000)
   handle /api/follows/* {
     reverse_proxy follow-service:5000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-      header_up X-Forwarded-Host {host}
+      import api_proxy
       health_uri /health
-      health_interval 10s
-      health_timeout 5s
     }
   }
 
   # Feed Service (port 5000)
   handle /api/feed/* {
     reverse_proxy feed-service:5000 {
-      header_up X-Real-IP {remote_host}
-      header_up X-Forwarded-For {remote_host}
-      header_up X-Forwarded-Proto {scheme}
-      header_up X-Forwarded-Host {host}
+      import api_proxy
       health_uri /health
-      health_interval 10s
-      health_timeout 5s
     }
   }
 
-  # Supabase Kong Gateway (Auth and REST)
+  # Profile Service (port 5000)
+  handle /api/profile/* {
+    reverse_proxy profile-service:5000 {
+      import api_proxy
+      health_uri /health
+    }
+  }
+
+  # Leaderboard Service (Go - port 8080)
+  handle /api/leaderboard/* {
+    reverse_proxy leaderboard-service:8080 {
+      import api_proxy
+      health_uri /health
+    }
+  }
+
+  # User Discovery Service (port 3010)
+  handle /api/discover/* {
+    reverse_proxy user-discovery-service:3010 {
+      import api_proxy
+      health_uri /actuator/health
+    }
+  }
+
+  # Social Interaction Service (port 5000)
+  handle /api/social/* {
+    reverse_proxy social-interaction-service:5000 {
+      import api_proxy
+      health_uri /health
+    }
+  }
+
+  # Explore Routes Service (Node.js - port 5000)
+  handle /api/explore/* {
+    reverse_proxy explore-routes-service:5000 {
+      import api_proxy
+      health_uri /health
+    }
+  }
+
   handle /auth/* {
+    # Handle OPTIONS preflight requests for CORS
+    @auth_options method OPTIONS
+    handle @auth_options {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    # Explicitly add CORS headers for /auth/* requests
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Type, X-Request-Id, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
@@ -133,6 +172,24 @@
   }
 
   handle /rest/* {
+    # Handle OPTIONS preflight requests for CORS
+    @rest_options method OPTIONS
+    handle @rest_options {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Prefer, Range, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Prefer, Range, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Range, Content-Type, X-Request-Id, apikey"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
@@ -141,6 +198,24 @@
   }
 
   handle /storage/* {
+    # Handle OPTIONS preflight requests for CORS
+    @storage_options method OPTIONS
+    handle @storage_options {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Range, X-Upsert, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Range, X-Upsert, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Length, Content-Range, Content-Type, ETag, X-Request-Id, apikey"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
@@ -198,8 +273,9 @@ https://{$DOMAIN} {
   handle @cors_options {
     header Access-Control-Allow-Origin "*"
     header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
-    header Access-Control-Allow-Headers "Content-Type, Authorization, X-Client-Info, X-Auth-Token"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
     header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
     respond 204
   }
 
@@ -207,7 +283,7 @@ https://{$DOMAIN} {
   header /api/* {
     Access-Control-Allow-Origin "*"
     Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
-    Access-Control-Allow-Headers "Content-Type, Authorization, X-Client-Info, X-Auth-Token"
+    Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
     Access-Control-Max-Age "3600"
   }
 
@@ -287,8 +363,56 @@ https://{$DOMAIN} {
     }
   }
 
+  # Profile Service
+  handle /api/profile/* {
+    reverse_proxy profile-service:5000 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      header_up X-Forwarded-Host {host}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
+  # Leaderboard Service (Go - port 8080)
+  handle /api/leaderboard/* {
+    reverse_proxy leaderboard-service:8080 {
+      header_up X-Real-IP {remote_host}
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Forwarded-Proto {scheme}
+      header_up X-Forwarded-Host {host}
+      health_uri /health
+      health_interval 10s
+      health_timeout 5s
+      fail_duration 30s
+      max_fails 3
+    }
+  }
+
   # Supabase Kong Gateway
   handle /auth/* {
+    # Handle OPTIONS preflight requests for CORS
+    @auth_options_prod method OPTIONS
+    handle @auth_options_prod {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Type, X-Request-Id, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
@@ -297,6 +421,24 @@ https://{$DOMAIN} {
   }
 
   handle /rest/* {
+    # Handle OPTIONS preflight requests for CORS
+    @rest_options_prod method OPTIONS
+    handle @rest_options_prod {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Prefer, Range, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Prefer, Range, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Range, Content-Type, X-Request-Id, apikey"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
@@ -305,6 +447,24 @@ https://{$DOMAIN} {
   }
 
   handle /storage/* {
+    # Handle OPTIONS preflight requests for CORS
+    @storage_options_prod method OPTIONS
+    handle @storage_options_prod {
+      header Access-Control-Allow-Origin "*"
+      header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+      header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Range, X-Upsert, apikey, x-client-info, x-supabase-api-version"
+      header Access-Control-Max-Age "3600"
+      header Access-Control-Allow-Credentials "true"
+      respond 204
+    }
+
+    header Access-Control-Allow-Origin "*"
+    header Access-Control-Allow-Methods "GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS"
+    header Access-Control-Allow-Headers "Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, Range, X-Upsert, apikey, x-client-info, x-supabase-api-version"
+    header Access-Control-Expose-Headers "Authorization, Content-Length, Content-Range, Content-Type, ETag, X-Request-Id, apikey"
+    header Access-Control-Max-Age "3600"
+    header Access-Control-Allow-Credentials "true"
+
     reverse_proxy supabase-kong:8000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}

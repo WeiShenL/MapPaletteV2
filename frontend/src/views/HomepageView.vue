@@ -239,7 +239,7 @@ export default {
     const userProfile = ref({
       name: '',
       username: '',
-      avatar: '/resources/images/default-profile.png',
+      avatar: '/resources/default-profile.png',
       stats: {
         routes: 0,
         following: 0,
@@ -288,7 +288,7 @@ export default {
       userProfile.value = {
         name: userData.username,
         username: userData.username, 
-        avatar: userData.profilePicture || '/resources/images/default-profile.png',
+        avatar: userData.profilePicture || '/resources/default-profile.png',
         stats: {
           routes: userData.postsCreated?.length || 0,
           following: userData.numFollowing || userData.following?.length || 0,  
@@ -378,10 +378,19 @@ export default {
           }
         }
         
+        // Listen for profile picture updates from settings
+        const handleProfilePictureUpdated = (event) => {
+          if (event.detail?.url) {
+            userProfile.value.avatar = event.detail.url
+          }
+        }
+        
         window.addEventListener('userLoaded', handleUserLoaded)
+        window.addEventListener('profilePictureUpdated', handleProfilePictureUpdated)
         
         onUnmounted(() => {
           window.removeEventListener('userLoaded', handleUserLoaded)
+          window.removeEventListener('profilePictureUpdated', handleProfilePictureUpdated)
         })
       }
     })

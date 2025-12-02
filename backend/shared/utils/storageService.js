@@ -9,12 +9,18 @@ const path = require('path');
 
 /**
  * Storage configuration
+ * Use internal Docker network URL for service-to-service communication
  */
 const STORAGE_CONFIG = {
-  supabaseUrl: process.env.SUPABASE_PUBLIC_URL || 'http://localhost:8000',
+  supabaseUrl: process.env.SUPABASE_INTERNAL_URL || 'http://supabase-kong:8000',
   supabaseKey: process.env.SUPABASE_SERVICE_KEY,
   storageUrl: process.env.STORAGE_URL || 'http://supabase-storage:5000',
+  // Public URL that browsers can access (via Caddy proxy)
+  publicBaseUrl: process.env.SUPABASE_PUBLIC_URL || 'http://localhost:8000',
 };
+
+console.log('[STORAGE_SERVICE] Configured with internal URL:', STORAGE_CONFIG.supabaseUrl);
+console.log('[STORAGE_SERVICE] Public base URL:', STORAGE_CONFIG.publicBaseUrl);
 
 /**
  * Bucket names
@@ -104,10 +110,18 @@ const uploadImage = async (options) => {
       throw new Error(`Failed to upload image: ${error.message}`);
     }
 
-    // Get public URL
+    // Get public URL - use the public base URL for browser access
     const {
-      data: { publicUrl },
+      data: { publicUrl: internalUrl },
     } = supabase.storage.from(bucket).getPublicUrl(filePath);
+    
+    // Replace internal URL with public URL for browser access
+    const publicUrl = internalUrl.replace(
+      STORAGE_CONFIG.supabaseUrl,
+      STORAGE_CONFIG.publicBaseUrl
+    );
+
+    console.log('[STORAGE_SERVICE] Upload successful:', { bucket, filePath, publicUrl });
 
     if (global.logger) {
       global.logger.info('Image uploaded successfully', {

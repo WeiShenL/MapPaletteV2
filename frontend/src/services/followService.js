@@ -3,12 +3,12 @@ import axios from '@/lib/axios';
 const SOCIAL_INTERACTION_SERVICE_URL = import.meta.env.VITE_SOCIAL_INTERACTION_URL || 'http://localhost:3005';
 
 const followService = {
-  // Follow a user
-  async followUser(userId, targetUserId) {
+  // Follow a user (currentUserId follows targetUserId)
+  async followUser(targetUserId, currentUserId) {
     try {
       const response = await axios.post(
         `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/follow`,
-        { userId }
+        { userId: currentUserId }
       );
       return response.data;
     } catch (error) {
@@ -17,12 +17,12 @@ const followService = {
     }
   },
 
-  // Unfollow a user
-  async unfollowUser(userId, targetUserId) {
+  // Unfollow a user (currentUserId unfollows targetUserId)
+  async unfollowUser(targetUserId, currentUserId) {
     try {
       const response = await axios.delete(
         `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/unfollow`,
-        { data: { userId } }
+        { data: { userId: currentUserId } }
       );
       return response.data;
     } catch (error) {
@@ -32,11 +32,11 @@ const followService = {
   },
 
   // Check if current user follows target user
-  async checkFollowStatus(userId, targetUserId) {
+  async checkFollowStatus(targetUserId, currentUserId) {
     try {
       const response = await axios.get(
         `${SOCIAL_INTERACTION_SERVICE_URL}/api/social/users/${targetUserId}/follow-status`,
-        { params: { userId } }
+        { params: { userId: currentUserId } }
       );
       return response.data;
     } catch (error) {

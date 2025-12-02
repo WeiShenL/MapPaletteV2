@@ -1,27 +1,193 @@
 _format_version: "2.1"
 _transform: true
 
+# ===========================================
+# CORS Plugin Configuration
+# ===========================================
+# Applied globally to handle preflight requests
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - "*"
+      methods:
+        - GET
+        - HEAD
+        - PUT
+        - PATCH
+        - POST
+        - DELETE
+        - OPTIONS
+      headers:
+        - Accept
+        - Accept-Version
+        - Authorization
+        - Content-Length
+        - Content-Type
+        - Date
+        - Origin
+        - X-Auth-Token
+        - X-Client-Info
+        - X-Requested-With
+        - apikey
+        - x-client-info
+        - x-supabase-api-version
+      exposed_headers:
+        - Authorization
+        - Content-Type
+        - X-Request-Id
+        - apikey
+        - x-client-info
+        - x-supabase-api-version
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
 services:
+  # ===========================================
+  # Supabase Auth Service (GoTrue)
+  # ===========================================
   - name: supabase-auth
     url: http://supabase-auth:9999
     routes:
       - name: auth-route
         paths:
-          - /auth
-        strip_path: false
+          - /auth/v1
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - HEAD
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Accept-Version
+            - Authorization
+            - Content-Length
+            - Content-Type
+            - Date
+            - Origin
+            - X-Auth-Token
+            - X-Client-Info
+            - X-Requested-With
+            - apikey
+            - x-client-info
+            - x-supabase-api-version
+          exposed_headers:
+            - Authorization
+            - Content-Type
+            - X-Request-Id
+            - apikey
+            - x-client-info
+            - x-supabase-api-version
+          credentials: true
+          max_age: 3600
+          preflight_continue: false
+      - name: request-transformer
+        config:
+          add:
+            headers:
+              - "X-Forwarded-Proto: https"
 
+  # ===========================================
+  # Supabase PostgREST Service
+  # ===========================================
   - name: supabase-postgrest
     url: http://supabase-rest:3000
     routes:
       - name: postgrest-route
         paths:
-          - /rest
-        strip_path: false
+          - /rest/v1
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - HEAD
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Accept-Version
+            - Authorization
+            - Content-Length
+            - Content-Type
+            - Date
+            - Origin
+            - Prefer
+            - Range
+            - apikey
+            - x-client-info
+            - x-supabase-api-version
+          exposed_headers:
+            - Authorization
+            - Content-Range
+            - Content-Type
+            - X-Request-Id
+            - apikey
+          credentials: true
+          max_age: 3600
+          preflight_continue: false
 
+  # ===========================================
+  # Supabase Storage Service
+  # ===========================================
   - name: supabase-storage
     url: http://supabase-storage:5000
     routes:
       - name: storage-route
         paths:
-          - /storage
-        strip_path: false
+          - /storage/v1
+        strip_path: true
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "*"
+          methods:
+            - GET
+            - HEAD
+            - PUT
+            - PATCH
+            - POST
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Accept-Version
+            - Authorization
+            - Content-Length
+            - Content-Type
+            - Date
+            - Origin
+            - Range
+            - X-Upsert
+            - apikey
+            - x-client-info
+            - x-supabase-api-version
+          exposed_headers:
+            - Authorization
+            - Content-Length
+            - Content-Range
+            - Content-Type
+            - ETag
+            - X-Request-Id
+            - apikey
+          credentials: true
+          max_age: 3600
+          preflight_continue: false

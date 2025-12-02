@@ -19,11 +19,11 @@ func main() {
 
 	router := gin.Default()
 
-	// CORS configuration
+	// CORS configuration - allow requests from frontend
 	config := cors.DefaultConfig()
-	config.AllowOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+	config.AllowOrigins = []string{"http://localhost:3000", "http://localhost:5173", "http://localhost"}
 	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization"}
+	config.AllowHeaders = []string{"Origin", "Content-Type", "Authorization", "x-supabase-api-version", "apikey", "x-client-info"}
 	router.Use(cors.New(config))
 
 	// Health check endpoint

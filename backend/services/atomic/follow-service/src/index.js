@@ -26,7 +26,7 @@ const startTime = Date.now();
 // Middleware
 app.use(requestId);
 app.use(httpLogger);
-app.use(cors());
+app.use(cors({ origin: true, allowedHeaders: ['Content-Type', 'Authorization', 'x-supabase-api-version', 'apikey', 'x-client-info'] }));
 app.use(express.json());
 
 // API Documentation

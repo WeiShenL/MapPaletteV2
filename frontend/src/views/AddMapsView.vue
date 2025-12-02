@@ -316,10 +316,10 @@ export default {
     const loadGoogleMapsScript = async () => {
       try {
         // Use environment variable for API key
-        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+        const apiKey = import.meta.env.GOOGLE_MAPS_API_KEY
 
         if (!apiKey || apiKey.startsWith('your')) {
-          throw new Error('Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY in .env file.')
+          throw new Error('Google Maps API key not configured. Please set GOOGLE_MAPS_API_KEY in .env file.')
         }
 
         mapsApiKey.value = apiKey
@@ -336,13 +336,13 @@ export default {
         })
       } catch (error) {
         console.error('Error loading Google Maps:', error)
-        setAlert('error', 'Could not load Google Maps API. Please make sure VITE_GOOGLE_MAPS_API_KEY is set in your .env file.')
+        setAlert('error', 'Could not load Google Maps API. Please make sure GOOGLE_MAPS_API_KEY is set in your .env file.')
       }
     }
     
     // Initialize Google Maps
     const initMap = () => {
-      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+      const mapId = import.meta.env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
 
       map.value = new google.maps.Map(document.getElementById("map"), {
         mapId: mapId, // Required for Advanced Markers API (google.maps.Marker deprecated Feb 2024)

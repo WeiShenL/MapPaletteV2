@@ -14,8 +14,44 @@ import java.util.List;
 public class FollowingResponse {
     
     @JsonProperty("following")
-    private List<String> following;
+    private List<FollowingUserDto> following;
     
-    @JsonProperty("count")
-    private int count;
+    @JsonProperty("pagination")
+    private PaginationDto pagination;
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class FollowingUserDto {
+        @JsonProperty("id")
+        private String id;
+        
+        @JsonProperty("username")
+        private String username;
+        
+        @JsonProperty("profilePicture")
+        private String profilePicture;
+        
+        @JsonProperty("points")
+        private Integer points;
+    }
+    
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PaginationDto {
+        @JsonProperty("page")
+        private int page;
+        
+        @JsonProperty("limit")
+        private int limit;
+        
+        @JsonProperty("total")
+        private int total;
+        
+        @JsonProperty("totalPages")
+        private int totalPages;
+    }
 }

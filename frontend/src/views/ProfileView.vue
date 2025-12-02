@@ -406,12 +406,12 @@ export default {
       followLoading.value = true
       try {
         if (isFollowing.value) {
-          await followService.unfollowUser(currentUser.value.id, profileUserId.value)
+          await followService.unfollowUser(profileUserId.value, currentUser.value.id)
           isFollowing.value = false
           userProfile.value.stats.followers = Math.max(0, userProfile.value.stats.followers - 1)
           setAlert('success', 'User unfollowed successfully!')
         } else {
-          await followService.followUser(currentUser.value.id, profileUserId.value)
+          await followService.followUser(profileUserId.value, currentUser.value.id)
           isFollowing.value = true
           userProfile.value.stats.followers += 1
           setAlert('success', 'User followed successfully!')

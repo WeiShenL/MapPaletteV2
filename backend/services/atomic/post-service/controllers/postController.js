@@ -264,6 +264,7 @@ const deletePost = async (req, res) => {
 };
 
 // Get all posts (with pagination)
+// Filters out posts from users with private profiles or private posts
 const getAllPosts = async (req, res) => {
   const { page = 1, limit = 20, cursor } = req.query;
 
@@ -273,6 +274,12 @@ const getAllPosts = async (req, res) => {
     const take = parseInt(limit);
 
     const posts = await db.post.findMany({
+      where: {
+        user: {
+          isProfilePrivate: false,
+          isPostPrivate: false,
+        }
+      },
       take: take + 1, // Fetch one extra to check if there are more
       ...(cursor && {
         cursor: { id: cursor },

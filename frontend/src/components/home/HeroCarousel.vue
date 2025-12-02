@@ -164,9 +164,9 @@ export default {
 
       // Small delay to ensure elements are hidden before animation starts
       setTimeout(() => {
-        title.classList.add('animate')
-        subtitle.classList.add('animate')
-        btnGroup.classList.add('animate')
+        if (title) title.classList.add('animate')
+        if (subtitle) subtitle.classList.add('animate')
+        if (btnGroup) btnGroup.classList.add('animate')
       }, 100)
 
       // Add pause and resume on hover if desired

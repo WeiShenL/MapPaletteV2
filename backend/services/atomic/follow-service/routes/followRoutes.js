@@ -1,30 +1,38 @@
 const express = require('express');
 const router = express.Router();
+const { z } = require('zod');
 const followController = require('../controllers/followController');
-const { verifyAuth } = require('/app/shared/middleware/auth');
-const { validate, userIdSchema, followSchema, paginationSchema } = require('/app/shared/middleware/validator');
+const { validate, userIdSchema, followSchema, paginationSchema, uuidSchema } = require('/app/shared/middleware/validator');
 const { moderateLimiter, lenientLimiter, strictLimiter } = require('/app/shared/middleware/rateLimiter');
 const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
+// Schema for checking follow relationship
+const checkFollowQuerySchema = z.object({
+  followerId: uuidSchema,
+  followingId: uuidSchema,
+});
+
 // Create follow relationship (moderate rate limit)
-router.post('/follow', moderateLimiter, verifyAuth, validate({ body: followSchema }), asyncHandler(followController.createFollow));
+// Note: Auth is handled at the composite service level (social-interaction-service)
+router.post('/follow', moderateLimiter, validate({ body: followSchema }), asyncHandler(followController.createFollow));
 
 // Delete follow relationship (moderate rate limit)
-router.delete('/follow', moderateLimiter, verifyAuth, validate({ body: followSchema }), asyncHandler(followController.deleteFollow));
+// Note: Auth is handled at the composite service level (social-interaction-service)
+router.delete('/follow', moderateLimiter, validate({ body: followSchema }), asyncHandler(followController.deleteFollow));
 
 // Get followers of a user (lenient rate limit)
-router.get('/followers/:userId', lenientLimiter, validate({ params: { userId: userIdSchema.shape.userId }, query: paginationSchema }), asyncHandler(followController.getFollowers));
+router.get('/followers/:userId', lenientLimiter, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(followController.getFollowers));
 
 // Get users that a user is following (lenient rate limit)
-router.get('/following/:userId', lenientLimiter, validate({ params: { userId: userIdSchema.shape.userId }, query: paginationSchema }), asyncHandler(followController.getFollowing));
+router.get('/following/:userId', lenientLimiter, validate({ params: userIdSchema, query: paginationSchema }), asyncHandler(followController.getFollowing));
 
 // Check if user A follows user B (lenient rate limit)
-router.get('/check', lenientLimiter, validate({ query: { followerId: userIdSchema.shape.userId, followingId: userIdSchema.shape.userId } }), asyncHandler(followController.checkFollow));
+router.get('/check', lenientLimiter, validate({ query: checkFollowQuerySchema }), asyncHandler(followController.checkFollow));
 
 // Get follow statistics for a user (lenient rate limit)
-router.get('/stats/:userId', lenientLimiter, validate({ params: { userId: userIdSchema.shape.userId } }), asyncHandler(followController.getFollowStats));
+router.get('/stats/:userId', lenientLimiter, validate({ params: userIdSchema }), asyncHandler(followController.getFollowStats));
 
 // Sync follow counts (utility endpoint) - Strict rate limit (internal use)
-router.post('/sync/:userId', strictLimiter, validate({ params: { userId: userIdSchema.shape.userId } }), asyncHandler(followController.syncFollowCounts));
+router.post('/sync/:userId', strictLimiter, validate({ params: userIdSchema }), asyncHandler(followController.syncFollowCounts));
 
 module.exports = router;

@@ -11,7 +11,7 @@ model User {
   id              String    @id @default(uuid())
   email           String    @unique
   username        String    @unique
-  profilePicture  String    @default("/resources/default-profile.png")
+  profilePicture  String    @default("/resources/images/default-profile.png")
   birthday        String?   // Optional - can be NULL if not provided during signup
   gender          String?   // Optional - can be NULL if not provided during signup
   isProfilePrivate Boolean  @default(false)
@@ -23,7 +23,7 @@ model User {
   updatedAt       DateTime  @updatedAt
   isDeleted       Boolean   @default(false)
   deletedAt       DateTime?
-  searchVector    String?   // PostgreSQL tsvector for full-text search
+  searchVector    Unsupported("tsvector")?   // PostgreSQL tsvector for full-text search
 
   posts           Post[]
   followers       Follow[]  @relation("UserFollowers")
@@ -57,7 +57,7 @@ model Post {
   updatedAt     DateTime  @updatedAt
   isDeleted     Boolean   @default(false)
   deletedAt     DateTime?
-  searchVector  String?   // PostgreSQL tsvector for full-text search
+  searchVector  Unsupported("tsvector")?   // PostgreSQL tsvector for full-text search
 
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   likes         Like[]

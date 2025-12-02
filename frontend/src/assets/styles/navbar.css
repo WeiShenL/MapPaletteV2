@@ -113,20 +113,39 @@
         padding: 0 !important;
     }
 
+    /* Solid background for collapsed navbar */
+    .navbar-collapse {
+        background-color: white;
+        border-radius: 0 0 8px 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 1rem 0;
+        margin-top: 0.5rem;
+    }
+
     .navbar .dropdown-menu {
         border: none;
-        background: transparent;
+        background-color: #f8f9fa;
         box-shadow: none;
+        margin-left: 1rem;
     }
 
     .navbar .dropdown-item {
         padding: 0.5rem 1rem;
-        margin-left: 3.5rem; 
+        color: #333;
+    }
+    
+    .navbar .dropdown-item:hover {
+        background-color: rgba(255, 107, 107, 0.1);
+    }
+    
+    .navbar .dropdown-item.active {
+        background-color: #FF6B6B;
+        color: white;
     }
     
     .navbar .dropdown-divider {
-        margin-left: 3.5rem;
-        margin-right: 1rem;
+        margin: 0.5rem 0;
+        border-color: rgba(0, 0, 0, 0.1);
     }
 
     .nav-link {
@@ -136,5 +155,14 @@
     
     .navbar .rounded-circle {
         margin-left: 1rem;
+    }
+    
+    /* Better alignment for collapsed menu items */
+    .navbar-collapse {
+        padding: 0.5rem 0;
+    }
+    
+    .navbar-nav {
+        padding: 0 1rem;
     }
 }

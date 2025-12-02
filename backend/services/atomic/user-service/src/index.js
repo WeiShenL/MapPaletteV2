@@ -31,7 +31,7 @@ const startTime = Date.now();
 // Middleware
 app.use(requestId); // Track requests with unique IDs
 app.use(httpLogger); // Log all HTTP requests
-app.use(cors({ origin: true }));
+app.use(cors({ origin: true, allowedHeaders: ['Content-Type', 'Authorization', 'x-supabase-api-version'] }));
 app.use(express.json());
 
 // API Documentation

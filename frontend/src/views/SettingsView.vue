@@ -47,7 +47,7 @@
                     <!-- Profile picture preview container -->
                     <div id="file-preview-wrapper">
                       <div id="file-preview">
-                        <img :src="userProfile.avatar || '/resources/default-profile.png'" 
+                        <img :src="userProfile.avatar || '/resources/images/default-profile.png'" 
                           alt="Profile Picture" 
                           id="profile-pic-img">
                       </div>
@@ -62,7 +62,7 @@
                         <i class="bi bi-camera-fill me-1"></i>
                         Change Picture
                       </button>
-                      <button v-if="userProfile.avatar !== '/resources/default-profile.png'" 
+                      <button v-if="userProfile.avatar && !userProfile.avatar.includes('default-profile.png')" 
                           class="btn btn-outline-danger" 
                           @click="removeProfilePicture">
                         <i class="bi bi-trash me-1"></i>
@@ -163,10 +163,10 @@
 
 <script>
 import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { useRouter } from 'vue-router';
 import axios from '@/lib/axios';
 import { useAuth } from '@/composables/useAuth';
 import { useAlert } from '@/composables/useAlert';
-import { uploadProfilePicture, deleteOldProfilePicture as deleteFromStorage } from '@/lib/storage';
 import NavBar from '@/components/layout/NavBar.vue';
 import SiteFooter from '@/components/layout/SiteFooter.vue';
 import AlertNotification from '@/components/common/AlertNotification.vue';
@@ -179,13 +179,14 @@ export default {
     AlertNotification
   },
   setup() {
-    const { currentUser, getToken } = useAuth();
+    const router = useRouter();
+    const { currentUser, getToken, updateProfilePicture: updateGlobalProfilePicture, updateUsername: updateGlobalUsername } = useAuth();
     const { showAlert, alertType, alertMessage, setAlert } = useAlert();
 
     const currentTab = ref('profile');
     const userProfile = ref({
       username: '',
-      avatar: '/resources/default-profile.png',
+      avatar: '/resources/images/default-profile.png',
     });
     const navbarUserProfile = ref(null);
     const navItems = ref([
@@ -199,6 +200,11 @@ export default {
     const tooltipInstances = ref([]);
     const tooltipInitTimeout = ref(null);
     const fileInput = ref(null);
+    const photoAlert = ref({
+      show: false,
+      type: 'success',
+      message: ''
+    });
 
     const initTooltips = () => {
       destroyTooltips();
@@ -234,44 +240,73 @@ export default {
       }
     };
 
-    const deleteOldProfilePicture = async (oldImageUrl) => {
-      try {
-        const result = await deleteFromStorage(oldImageUrl);
-        if (!result.success) console.warn('Could not delete old profile picture:', result.error);
-      } catch (error) {
-        console.error('Error deleting old profile picture:', error);
-      }
-    };
-
     const handleImageUpload = async (event) => {
       const file = event.target.files[0];
       if (!file) return;
 
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+      if (!allowedTypes.includes(file.type)) {
+        setAlert('error', 'Invalid file type. Please upload a JPEG, PNG, WebP, or GIF image.');
+        return;
+      }
+
+      // Validate file size (5MB max)
+      const maxSize = 5 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setAlert('error', 'File too large. Maximum size is 5MB.');
+        return;
+      }
+
       try {
-        const oldImageUrl = userProfile.value.avatar;
-        const uploadResult = await uploadProfilePicture(file, currentUser.value.id);
+        // Use backend API for upload (same as signup page)
+        // This uses the service role key which bypasses RLS issues
+        const formData = new FormData();
+        formData.append('profilePicture', file);
 
-        if (!uploadResult.success) {
-          setAlert('error', uploadResult.error || 'Failed to upload image');
-          return;
+        const uploadResponse = await axios.post(
+          `/api/users/upload-profile-picture/${currentUser.value.id}`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            },
+            timeout: 30000 // 30 second timeout
+          }
+        );
+
+        if (uploadResponse.data && uploadResponse.data.url) {
+          userProfile.value.avatar = uploadResponse.data.url;
+          // Also update navbar
+          if (navbarUserProfile.value) {
+            navbarUserProfile.value.avatar = uploadResponse.data.url;
+          }
+          // Update global auth state so all components get the new picture
+          updateGlobalProfilePicture(uploadResponse.data.url);
+          setAlert('success', 'Profile picture updated successfully!');
+        } else {
+          setAlert('error', 'Failed to upload image. Please try again.');
         }
-
-        await updateUserProfilePicture(uploadResult.url);
-        userProfile.value.avatar = uploadResult.url;
-        await deleteOldProfilePicture(oldImageUrl);
-        setAlert('success', 'Profile picture updated successfully!');
       } catch (error) {
         console.error('Error updating profile picture:', error);
-        setAlert('error', 'An error occurred while updating the profile picture.');
+        const errorMessage = error.response?.data?.message || 'An error occurred while updating the profile picture.';
+        setAlert('error', errorMessage);
       }
+
+      // Clear the file input so the same file can be selected again
+      event.target.value = '';
     };
 
     const removeProfilePicture = async () => {
-      const oldImageUrl = userProfile.value.avatar;
       try {
-        await updateUserProfilePicture('/resources/default-profile.png');
-        userProfile.value.avatar = '/resources/default-profile.png';
-        await deleteOldProfilePicture(oldImageUrl);
+        const defaultPicture = '/resources/images/default-profile.png';
+        await updateUserProfilePicture(defaultPicture);
+        userProfile.value.avatar = defaultPicture;
+        if (navbarUserProfile.value) {
+          navbarUserProfile.value.avatar = defaultPicture;
+        }
+        // Update global auth state so all components get the default picture
+        updateGlobalProfilePicture(defaultPicture);
         setAlert('success', 'Profile picture removed successfully.');
       } catch (error) {
         console.error('Error removing profile picture:', error);
@@ -306,12 +341,12 @@ export default {
           
           userProfile.value = {
             username: userData.username || '',
-            avatar: userData.profilePicture || '/resources/default-profile.png'
+            avatar: userData.profilePicture || '/resources/images/default-profile.png'
           };
           navbarUserProfile.value = {
             name: userData.username || '',
             username: userData.username || '',
-            avatar: userData.profilePicture || '/resources/default-profile.png'
+            avatar: userData.profilePicture || '/resources/images/default-profile.png'
           };
           privacySettings.value = {
             keepProfilePrivate: userData.isProfilePrivate ?? false,
@@ -358,6 +393,7 @@ export default {
       alertType,
       alertMessage,
       fileInput,
+      photoAlert,
       switchTab,
       updateUsername,
       handleImageUpload,

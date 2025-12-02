@@ -142,7 +142,14 @@ const getTrendingPosts = async (req, res) => {
     const take = parseInt(limit);
 
     // Get posts ordered by like count (trending)
+    // Filter out posts from users with private profiles or private posts
     const posts = await db.post.findMany({
+      where: {
+        user: {
+          isProfilePrivate: false,
+          isPostPrivate: false,
+        }
+      },
       take: take + 1,
       ...(cursor && {
         cursor: { id: cursor },
@@ -224,8 +231,15 @@ const getRecentPosts = async (req, res) => {
 
     const take = parseInt(limit);
 
+    // Filter out posts from users with private profiles or private posts
     const posts = await db.post.findMany({
-      where: region ? { region } : {},
+      where: {
+        ...(region ? { region } : {}),
+        user: {
+          isProfilePrivate: false,
+          isPostPrivate: false,
+        }
+      },
       take: take + 1,
       ...(cursor && {
         cursor: { id: cursor },
@@ -304,6 +318,7 @@ const searchPosts = async (req, res) => {
   try {
     const take = parseInt(limit);
 
+    // Filter out posts from users with private profiles or private posts
     const posts = await db.post.findMany({
       where: {
         AND: [
@@ -313,7 +328,13 @@ const searchPosts = async (req, res) => {
               { title: { contains: q, mode: 'insensitive' } },
               { description: { contains: q, mode: 'insensitive' } }
             ]
-          } : {}
+          } : {},
+          {
+            user: {
+              isProfilePrivate: false,
+              isPostPrivate: false,
+            }
+          }
         ]
       },
       take: take + 1,

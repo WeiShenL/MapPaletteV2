@@ -30,9 +30,22 @@ func NewUserServiceClient() *UserServiceClient {
 	}
 }
 
+// UsersResponse represents the paginated response from user service
+type UsersResponse struct {
+	Users      []User `json:"users"`
+	Pagination struct {
+		Page       int `json:"page"`
+		Limit      int `json:"limit"`
+		Total      int `json:"total"`
+		TotalPages int `json:"totalPages"`
+	} `json:"pagination"`
+}
+
 // GetAllUsersWithPoints fetches all users with their points from the user service
 func (c *UserServiceClient) GetAllUsersWithPoints() ([]User, error) {
-	url := fmt.Sprintf("%s/api/users/getallusers", c.baseURL)
+	// Use leaderboard endpoint which returns all users ordered by points
+	// with a high limit to get all users
+	url := fmt.Sprintf("%s/api/users/leaderboard/all?limit=1000", c.baseURL)
 	
 	resp, err := c.client.Get(url)
 	if err != nil {
@@ -45,12 +58,12 @@ func (c *UserServiceClient) GetAllUsersWithPoints() ([]User, error) {
 		return nil, fmt.Errorf("user service returned status %d: %s", resp.StatusCode, string(body))
 	}
 
-	var users []User
-	if err := json.NewDecoder(resp.Body).Decode(&users); err != nil {
+	var usersResp UsersResponse
+	if err := json.NewDecoder(resp.Body).Decode(&usersResp); err != nil {
 		return nil, fmt.Errorf("failed to decode users response: %w", err)
 	}
 
-	return users, nil
+	return usersResp.Users, nil
 }
 
 // GetUserByID fetches a specific user by ID

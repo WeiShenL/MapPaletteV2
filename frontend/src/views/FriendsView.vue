@@ -50,7 +50,7 @@
         <!-- Friends Section with Load More -->
         <div 
           v-if="filteredFriends.length > 0" 
-          class="col-md-4 col-sm-6 mb-4"
+          class="friend-col mb-4"
           v-for="friend in filteredFriends.slice(0, displayedFriends)" 
           :key="friend.id"
         >
@@ -64,20 +64,21 @@
                   <span v-if="friend.newFriend" class="text-danger ms-2" style="font-weight: bold;">New!</span>
                 </h5>
               </div>
-              <div class="d-flex flex-column">
+              <div class="d-flex gap-2 friend-actions">
                 <button 
-                  class="btn mb-2" 
-                  :class="{'btn-outline-danger': hoveringFriend === friend.id, 'btn-success': hoveringFriend !== friend.id}"
+                  class="btn btn-sm" 
+                  :class="{'btn-outline-danger': hoveringFriend === friend.id, 'btn-outline-success': hoveringFriend !== friend.id}"
                   @click="confirmUnfollow(friend)" 
                   @mouseover="hoveringFriend = friend.id" 
                   @mouseleave="hoveringFriend = null" 
                   :disabled="disableButtons"
                 >
-                  <i :class="hoveringFriend === friend.id ? 'fas fa-user-minus me-1' : 'fas fa-check me-1'"></i>
-                  {{ hoveringFriend === friend.id ? 'Unfollow' : 'Following' }}
+                  <i :class="hoveringFriend === friend.id ? 'fas fa-user-minus' : 'fas fa-check'"></i>
+                  <span class="btn-text">{{ hoveringFriend === friend.id ? 'Unfollow' : 'Following' }}</span>
                 </button>
-                <button class="btn btn-outline-primary follow-btn" :disabled="disableButtons" @click="openProfile(friend)">
-                  <i class="fas fa-user me-1"></i> View Profile
+                <button class="btn btn-sm btn-outline-primary" :disabled="disableButtons" @click="openProfile(friend)">
+                  <i class="fas fa-user"></i>
+                  <span class="btn-text">View</span>
                 </button>
               </div>
             </div>
@@ -91,7 +92,7 @@
         <h1 class="text-center mb-4 mt-4">Other Users</h1>
         <div 
           v-if="filteredOtherUsers.length > 0" 
-          class="col-md-4 mb-4"
+          class="friend-col mb-4"
           v-for="user in filteredOtherUsers.slice(0, displayedOtherUsers)" 
           :key="user.id"
         >
@@ -102,26 +103,27 @@
               <div class="flex-grow-1">
                 <h5 class="card-title mb-1">{{ user.username }}</h5>
               </div>
-              <div class="d-flex flex-column">
+              <div class="d-flex gap-2 friend-actions">
                 <button 
-                  class="btn follow-btn mb-2"
-                  :class="{
-                    'btn-outline-primary': !isFollowingUser(user.id),
-                    'btn-success': followSuccess === user.id && !transitionComplete,
-                    'btn-outline-danger': transitionComplete
-                  }"
+                  v-if="followSuccess === user.id"
+                  class="btn btn-sm btn-outline-success"
+                  disabled
+                >
+                  <i class="fas fa-check"></i>
+                  <span class="btn-text">Following</span>
+                </button>
+                <button 
+                  v-else
+                  class="btn btn-sm btn-outline-primary"
                   @click="followUser(user)" 
                   :disabled="disableButtons || isFollowingUser(user.id)"
                 >
-                  <i v-if="!followSuccess || followSuccess !== user.id" :class="isFollowingUser(user.id) ? 'fas fa-spinner fa-spin' : 'fas fa-user-plus me-1'"></i>
-                  <i v-else-if="followSuccess === user.id && !transitionComplete" class="fas fa-check me-1"></i>
-                  <i v-else class="fas fa-user-minus me-1"></i>
-                  <span v-if="!followSuccess || followSuccess !== user.id">{{ isFollowingUser(user.id) ? 'Following...' : 'Follow' }}</span>
-                  <span v-else-if="followSuccess === user.id && !transitionComplete">Followed</span>
-                  <span v-else>Unfollow</span>
+                  <i :class="isFollowingUser(user.id) ? 'fas fa-spinner fa-spin' : 'fas fa-user-plus'"></i>
+                  <span class="btn-text">{{ isFollowingUser(user.id) ? '...' : 'Follow' }}</span>
                 </button>
-                <button class="btn btn-outline-primary follow-btn" :disabled="disableButtons" @click="openProfile(user)">
-                  <i class="fas fa-user me-1"></i> View Profile
+                <button class="btn btn-sm btn-outline-primary" :disabled="disableButtons" @click="openProfile(user)">
+                  <i class="fas fa-user"></i>
+                  <span class="btn-text">View</span>
                 </button>
               </div>
             </div>
@@ -203,6 +205,12 @@ export default {
     const disableButtons = ref(false);
     const isLoading = ref(true);
     const hoveringFriend = ref(null);
+    const followSuccess = ref(null);
+    const pendingFollows = ref(new Set());
+
+    const isFollowingUser = (userId) => {
+      return pendingFollows.value.has(userId);
+    };
 
     const filteredFriends = computed(() => {
       return friends.value.filter(friend =>
@@ -210,10 +218,10 @@ export default {
       );
     });
 
+    // Privacy filtering is now done server-side in user-discovery-service
     const filteredOtherUsers = computed(() => {
       return otherUsers.value.filter(user =>
-        user && user.username && user.username.toLowerCase().includes((searchQuery.value || '').toLowerCase()) && 
-        (!user.isProfilePrivate || user.isFollowing)
+        user && user.username && user.username.toLowerCase().includes((searchQuery.value || '').toLowerCase())
       );
     });
 
@@ -270,17 +278,33 @@ export default {
       const friendId = user.id;
       const currentUserId = currentUser.value.id;
 
+      // Mark as pending
+      pendingFollows.value.add(friendId);
+
       const success = await toggleOptimistic({
           item: user,
           key: 'isFollowing',
           apiCall: () => socialInteractionService.followUser(friendId, currentUserId),
-          onError: () => setAlert('error', 'Failed to follow user. Please try again.')
+          onError: () => {
+            pendingFollows.value.delete(friendId);
+            setAlert('error', 'Failed to follow user. Please try again.');
+          }
       });
 
       if (success) {
-        otherUsers.value = otherUsers.value.filter(u => u.id !== friendId);
-        friends.value.unshift(user);
+        followSuccess.value = friendId;
+        pendingFollows.value.delete(friendId);
+        
+        // Show success state briefly, then move user to friends
+        setTimeout(() => {
+          otherUsers.value = otherUsers.value.filter(u => u.id !== friendId);
+          friends.value.unshift({ ...user, isFollowing: true });
+          followSuccess.value = null;
+        }, 800);
+        
         setAlert('success', 'User followed successfully!');
+      } else {
+        pendingFollows.value.delete(friendId);
       }
     };
 
@@ -359,8 +383,10 @@ export default {
       disableButtons,
       isLoading,
       hoveringFriend,
+      followSuccess,
       filteredFriends,
       filteredOtherUsers,
+      isFollowingUser,
       applyFilters,
       clearSearch,
       confirmUnfollow,

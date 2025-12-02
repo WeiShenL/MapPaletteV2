@@ -17,7 +17,10 @@ const createUser = async (req, res) => {
 
   try {
     // Check if username already exists
-    const existing = await db.user.findUnique({ where: { username } });
+    const existing = await db.user.findUnique({ 
+      where: { username },
+      select: { id: true }  // Only select id to avoid tsvector deserialization issues
+    });
     if (existing) {
       return res.status(400).json({ message: 'Username already exists' });
     }
@@ -27,7 +30,7 @@ const createUser = async (req, res) => {
         id: userId, // Use Supabase auth user ID
         email,
         username,
-        profilePicture: profilePicture || '/resources/default-profile.png',
+        profilePicture: profilePicture || '/resources/images/default-profile.png',
         birthday: birthday || null, // Optional
         gender: gender || null,     // Optional
         isProfilePrivate: false,
@@ -109,6 +112,8 @@ const getAllUsers = async (req, res) => {
           points: true,
           numFollowers: true,
           numFollowing: true,
+          isProfilePrivate: true,
+          isPostPrivate: true,
         },
         orderBy: { createdAt: 'desc' },
       }),
@@ -139,7 +144,10 @@ const getCondensedUsers = async (req, res) => {
   try {
     const [users, total, following] = await Promise.all([
       db.user.findMany({
-        where: { id: { not: currentUserID } },
+        where: { 
+          id: { not: currentUserID },
+          isProfilePrivate: false  // Only return public profiles
+        },
         take: parseInt(limit),
         skip,
         select: {
@@ -147,10 +155,11 @@ const getCondensedUsers = async (req, res) => {
           username: true,
           profilePicture: true,
           points: true,
+          isProfilePrivate: true,
         },
         orderBy: { points: 'desc' },
       }),
-      db.user.count({ where: { id: { not: currentUserID } } }),
+      db.user.count({ where: { id: { not: currentUserID }, isProfilePrivate: false } }),
       db.follow.findMany({
         where: { followerId: currentUserID },
         select: { followingId: true },
@@ -596,7 +605,7 @@ const assignDefaultProfilePicture = async (req, res) => {
         profilePicture: { equals: null },
       },
       data: {
-        profilePicture: '/resources/default-profile.png',
+        profilePicture: '/resources/images/default-profile.png',
       },
     });
 

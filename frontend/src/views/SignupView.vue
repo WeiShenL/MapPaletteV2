@@ -18,21 +18,21 @@
 
         <!-- Alert Container -->
         <div class="alert-container">
-          <div class="alert alert-danger alert-dismissible fade show" role="alert" id="errorAlert" v-if="showErrorAlert">
-            <strong>Sorry! You are unable to sign in because:</strong>
-            <ul class="alert-list">
-              <li v-for="error in errors" :key="error">{{ error }}</li>
-            </ul>
-            <button type="button" class="btn-close" @click="showErrorAlert = false" aria-label="Close"></button>
-          </div>
+          <AlertNotification 
+            :show="showErrorAlert" 
+            type="error" 
+            :message="errors.join('\n')"
+            @update:show="showErrorAlert = $event"
+          />
 
 
 
-          <!-- Success Alert -->
-          <div class="alert alert-success alert-dismissible fade show" role="alert" v-if="showSuccessAlert">
-            <strong>Signup successful!</strong> You have successfully signed up. Redirecting you to the homepage...
-            <button type="button" class="btn-close" @click="showSuccessAlert = false" aria-label="Close"></button>
-          </div>
+          <AlertNotification 
+            :show="showSuccessAlert" 
+            type="success" 
+            :message="currentSuccessMessage"
+            @update:show="showSuccessAlert = $event"
+          />
         </div>
       
         <!-- Profile Picture Upload -->
@@ -137,7 +137,7 @@
 </template>
 
 <script>
-import { ref, nextTick } from 'vue'
+import { ref, shallowRef, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth';
 import { useAlert } from '@/composables/useAlert';
@@ -161,13 +161,14 @@ export default {
     const { showAlert, alertType, alertMessage, setAlert } = useAlert()
     const profileInput = ref(null)
     const profilePreview = ref(null)
-    const profileFile = ref(null)
+    const profileFile = shallowRef(null)  // Use shallowRef for File objects
     const showErrorAlert = ref(false)
     const showSuccessAlert = ref(false)
     const errors = ref([])
     const isSubmitting = ref(false)
     const showTosModal = ref(false)
     const showPrivacyModal = ref(false)
+    const currentSuccessMessage = ref('')
 
     const formData = ref({
       email: '',
@@ -232,20 +233,22 @@ export default {
       showErrorAlert.value = false
     }
 
-    const showAlertMessage = (message) => {
-      errors.value.push(message)
-      showErrorAlert.value = true
-    }
+    const displayErrorMessages = (messages) => {
+      errors.value = Array.isArray(messages) ? messages : [messages];
+      showErrorAlert.value = true;
+      showSuccessAlert.value = false; // Ensure success alert is hidden
+    };
 
-    const triggerFileInput = async () => {
-      await nextTick()
-      try {
-        const inputElement = profileInput.value || document.querySelector('input[type="file"]')
-        if (inputElement) {
-          inputElement.click()
-        }
-      } catch (error) {
-        console.error('Error triggering file input:', error)
+    const displaySuccessMessage = (message) => {
+      currentSuccessMessage.value = message;
+      showSuccessAlert.value = true;
+      showErrorAlert.value = false; // Ensure error alert is hidden
+    };
+
+    const triggerFileInput = () => {
+      // Direct click without nextTick - browser security requires click to be synchronous with user event
+      if (profileInput.value) {
+        profileInput.value.click()
       }
     }
 
@@ -257,6 +260,7 @@ export default {
     }
 
     const handleFileUpload = (file) => {
+      console.log('handleFileUpload called with file:', file?.name, file?.size, file?.type)
       profileFile.value = file
       const acceptedImageTypes = [
         'image/jpeg',
@@ -279,9 +283,12 @@ export default {
         reader.onload = (e) => {
           profilePreview.value = e.target.result
           profileFile.value = file
+          console.log('File stored in profileFile.value:', profileFile.value?.name)
         }
         reader.readAsDataURL(file)
       } else {
+        console.log('File rejected - invalid type:', file?.type)
+        profileFile.value = null  // Reset if invalid
         setAlert('error', 'Please select a valid static image file (JPG, JPEG, PNG, BMP, WEBP, or TIFF).')
       }
     }
@@ -347,7 +354,7 @@ export default {
       isSubmitting.value = true
 
       try {
-        // 1. Create user in Supabase Auth
+        // 1. Create user in Supabase Auth (database trigger creates user in public.users)
         const { success, user, error } = await signup(
             formData.value.email,
             formData.value.password,
@@ -360,19 +367,37 @@ export default {
             throw new Error(error || 'Could not create user in Supabase.');
         }
         
-        // 2. Create user in your user microservice
-        const response = await axios.post('/api/users/create', {
-            userId: user.id, // Use the ID from Supabase Auth
-            email: formData.value.email,
-            username: formData.value.username,
-            birthday: formData.value.birthday,
-            gender: formData.value.gender
-        });
+        // Note: User is automatically created in public.users via database trigger
+        // No need to call /api/users/create
 
-        const { uid } = response.data
+        // Sign in first to get authentication token
+        let loginSuccessful = false
+        try {
+          const loginResult = await login(formData.value.email, formData.value.password)
+          if (!loginResult.success) {
+            throw new Error(loginResult.error)
+          }
+          console.log('User signed in successfully after account creation')
+          loginSuccessful = true
+          
+          // Wait a moment for the session to be established
+          await new Promise(resolve => setTimeout(resolve, 500))
+        } catch (signInError) {
+          console.error('Failed to sign in after account creation:', signInError)
+        }
 
-        // Upload profile picture if selected
-        if (profileFile.value) {
+        // Upload profile picture if selected (after login so we have auth token)
+        console.log('Profile upload check:', {
+          hasProfileFile: !!profileFile.value,
+          profileFileName: profileFile.value?.name,
+          profileFileSize: profileFile.value?.size,
+          profileFileType: profileFile.value?.type,
+          loginSuccessful,
+          userId: user.id
+        })
+        
+        if (profileFile.value && loginSuccessful) {
+          console.log('Attempting to upload profile picture...')
           const formDataImg = new FormData()
           formDataImg.append('profilePicture', profileFile.value)
           
@@ -380,28 +405,23 @@ export default {
             const uploadResponse = await axios.post(`/api/users/upload-profile-picture/${user.id}`, formDataImg, {
               headers: {
                 'Content-Type': 'multipart/form-data'
-              }
+              },
+              timeout: 30000 // 30 second timeout for upload
             })
             console.log('Profile picture uploaded:', uploadResponse.data)
           } catch (uploadError) {
             console.error('Profile picture upload failed:', uploadError.response?.data || uploadError.message)
+            // Don't block signup success if profile picture upload fails
           }
+        } else {
+          console.log('Skipping profile picture upload:', { 
+            reason: !profileFile.value ? 'No file selected' : 'Login failed',
+            profileFileValue: profileFile.value
+          })
         }
 
-        // Since the backend creates both Auth and database user, just sign in
-        try {
-          const loginResult = await login(formData.value.email, formData.value.password)
-          if (!loginResult.success) {
-            throw new Error(loginResult.error)
-          }
-          console.log('User signed in successfully after account creation')
-        } catch (signInError) {
-          console.error('Failed to sign in after account creation:', signInError)
-          // Account was created but sign in failed - handle gracefully
-          showAlertMessage('warning', 'Account created successfully! Please try logging in.')
-        }
-
-        showSuccessAlert.value = true
+        // Show success message
+        displaySuccessMessage('Account created successfully! Redirecting to homepage...')
         isSubmitting.value = false
         
         // Redirect after 2 seconds
@@ -426,7 +446,7 @@ export default {
         }
 
         const errorMessage = errorMap[rawErrorMessage] || rawErrorMessage || 'An unknown error occurred during signup.';
-        showAlertMessage(errorMessage);
+        displayErrorMessages(errorMessage);
 
         // Scroll to top to show error
         const container = document.querySelector('.signup-container')
@@ -452,6 +472,7 @@ export default {
       showPrivacyModal,
       mappaletteLogo,
       signupVideo,
+      currentSuccessMessage,
       validateField,
       clearFieldError,
       triggerFileInput,

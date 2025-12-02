@@ -39,8 +39,7 @@ services:
       - ./backend/db/volumes/db/realtime.sql:/docker-entrypoint-initdb.d/migrations/04-realtime.sql:Z
       - ./backend/db/volumes/db/webhooks.sql:/docker-entrypoint-initdb.d/migrations/05-webhooks.sql:Z
       - ./backend/db/volumes/db/roles.sql:/docker-entrypoint-initdb.d/migrations/99-roles.sql:Z
-      # Mount init directory for data scripts
-      - ./backend/db/volumes/db/init:/docker-entrypoint-initdb.d/init:Z
+      # Database data persistence
       - supabase-db-data:/var/lib/postgresql/data
     networks:
       - mappalette-network
@@ -80,6 +79,9 @@ services:
       GOTRUE_EXTERNAL_EMAIL_ENABLED: ${ENABLE_EMAIL_SIGNUP:-true}
       GOTRUE_MAILER_AUTOCONFIRM: 'true'
       GOTRUE_MAILER_EXTERNAL_HOSTS: localhost,localhost:3000,localhost:8000
+      # CORS Configuration for GoTrue
+      GOTRUE_EXTERNAL_CORS_ALLOWED_ORIGINS: '*'
+      GOTRUE_EXTERNAL_CORS_ALLOWED_HEADERS: 'Accept, Accept-Version, Authorization, Content-Length, Content-Type, Date, Origin, X-Auth-Token, X-Client-Info, X-Requested-With, apikey, x-client-info, x-supabase-api-version'
     networks:
       - mappalette-network
 
@@ -179,20 +181,30 @@ services:
     ports:
       - "${STUDIO_PORT:-8081}:3000"
     environment:
+      HOSTNAME: "::"
       SUPABASE_URL: http://supabase-kong:8000
+      SUPABASE_PUBLIC_URL: ${SUPABASE_PUBLIC_URL:-http://localhost:8000}
       STUDIO_PG_META_URL: http://supabase-meta:8080
-      SUPABASE_DB_HOST: supabase-db
-      SUPABASE_DB_PORT: 5432
-      SUPABASE_DB_USER: postgres
-      SUPABASE_DB_PASSWORD: ${POSTGRES_PASSWORD}
-      SUPABASE_DB_NAME: ${POSTGRES_DB}
+      POSTGRES_HOST: supabase-db
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_META_CRYPTO_KEY: ${PG_META_CRYPTO_KEY}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+      DEFAULT_ORGANIZATION_NAME: MapPalette
+      DEFAULT_PROJECT_NAME: MapPaletteV2
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/platform/profile').then((r) => {if (r.status !== 200) throw new Error(r.status)})"
+        ]
+      timeout: 10s
+      interval: 5s
+      retries: 3
     depends_on:
       supabase-db:
         condition: service_healthy
@@ -291,6 +303,80 @@ services:
       npx prisma generate --schema=/app/shared/prisma/schema.prisma &&
       echo 'Prisma initialization complete!'
       "
+
+  # ====================
+  # STORAGE INIT SERVICE
+  # ====================
+  # Creates storage buckets after storage service is ready
+  # Uses direct database access as it's more reliable than the HTTP API for self-hosted setups
+
+  storage-init:
+    image: postgres:15-alpine
+    container_name: mappalette-storage-init
+    restart: "no"
+    depends_on:
+      supabase-storage:
+        condition: service_healthy
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - mappalette-network
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Creating storage buckets via database..."
+        sleep 3
+        
+        psql -h supabase-db -U postgres -d postgres -c "
+          INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+          VALUES 
+            ('profile-pictures', 'profile-pictures', true, 5242880, ARRAY['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']),
+            ('route-images', 'route-images', true, 10485760, ARRAY['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
+            ('route-images-optimized', 'route-images-optimized', true, 10485760, ARRAY['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+          ON CONFLICT (id) DO UPDATE SET
+            public = EXCLUDED.public,
+            file_size_limit = EXCLUDED.file_size_limit,
+            allowed_mime_types = EXCLUDED.allowed_mime_types;
+        "
+        
+        echo "Storage buckets created successfully!"
+        
+        echo "Setting up storage RLS policies..."
+        psql -h supabase-db -U postgres -d postgres -c "
+          -- Drop existing policies if they exist
+          DROP POLICY IF EXISTS \"Allow public read access for public buckets\" ON storage.objects;
+          DROP POLICY IF EXISTS \"Allow authenticated uploads\" ON storage.objects;
+          DROP POLICY IF EXISTS \"Allow authenticated updates\" ON storage.objects;
+          DROP POLICY IF EXISTS \"Allow authenticated deletes\" ON storage.objects;
+          DROP POLICY IF EXISTS \"Allow service role full access\" ON storage.objects;
+          
+          -- Policy 1: Allow public read access to objects in public buckets
+          CREATE POLICY \"Allow public read access for public buckets\" ON storage.objects
+            FOR SELECT USING (bucket_id IN (SELECT id FROM storage.buckets WHERE public = true));
+          
+          -- Policy 2: Allow authenticated users to upload to their own folder
+          CREATE POLICY \"Allow authenticated uploads\" ON storage.objects
+            FOR INSERT TO authenticated
+            WITH CHECK (bucket_id IN (SELECT id FROM storage.buckets WHERE public = true) AND (storage.foldername(name))[1] = auth.uid()::text);
+          
+          -- Policy 3: Allow authenticated users to update their own objects
+          CREATE POLICY \"Allow authenticated updates\" ON storage.objects
+            FOR UPDATE TO authenticated
+            USING ((storage.foldername(name))[1] = auth.uid()::text)
+            WITH CHECK ((storage.foldername(name))[1] = auth.uid()::text);
+          
+          -- Policy 4: Allow authenticated users to delete their own objects
+          CREATE POLICY \"Allow authenticated deletes\" ON storage.objects
+            FOR DELETE TO authenticated
+            USING ((storage.foldername(name))[1] = auth.uid()::text);
+          
+          -- Policy 5: Allow service_role full access
+          CREATE POLICY \"Allow service role full access\" ON storage.objects
+            FOR ALL TO service_role USING (true) WITH CHECK (true);
+        "
+        
+        echo "Storage RLS policies created!"
+        psql -h supabase-db -U postgres -d postgres -c "SELECT policyname, cmd, roles FROM pg_policies WHERE schemaname = 'storage' AND tablename = 'objects';"
 
   # ====================
   # ATOMIC SERVICES
@@ -397,6 +483,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    ports:
+      - "${FOLLOW_SERVICE_PORT:-3007}:5000"
+    env_file:
+      - .env
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://redis:6379
     networks:
       - mappalette-network
     volumes:
@@ -553,7 +648,7 @@ services:
       user-service:
         condition: service_started
     ports:
-      - "${LEADERBOARD_SERVICE_PORT:-3009}:5000"
+      - "${LEADERBOARD_SERVICE_PORT:-3009}:8080"
     env_file:
       - .env
     networks:
@@ -608,8 +703,8 @@ services:
         - VITE_USER_SERVICE_URL=${VITE_USER_SERVICE_URL:-http://localhost/api/users}
         - VITE_POST_SERVICE_URL=${VITE_POST_SERVICE_URL:-http://localhost/api/posts}
         # Google Maps
-        - VITE_GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
-        - VITE_GOOGLE_MAPS_MAP_ID=${VITE_GOOGLE_MAPS_MAP_ID:-DEMO_MAP_ID}
+        - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+        - GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID:-DEMO_MAP_ID}
         # Application
         - VITE_APP_NAME=MapPalette
         - VITE_APP_URL=${VITE_APP_URL:-http://localhost:3000}

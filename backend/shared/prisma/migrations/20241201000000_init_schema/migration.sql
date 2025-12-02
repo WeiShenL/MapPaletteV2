@@ -265,3 +265,80 @@ CREATE TRIGGER post_search_vector_trigger
 -- Create GIN indexes for fast full-text search
 CREATE INDEX IF NOT EXISTS user_search_vector_idx ON "users" USING GIN("searchVector");
 CREATE INDEX IF NOT EXISTS post_search_vector_idx ON "posts" USING GIN("searchVector");
+
+-- ============================================
+-- Storage Note
+-- ============================================
+-- Storage buckets and RLS policies are managed by the Supabase storage service.
+-- The storage service runs its own migrations and owns the storage.* tables.
+-- To create buckets, use the storage API or the Supabase Studio dashboard.
+-- Required buckets: profile-pictures, route-images, route-images-optimized
+-- See: backend/db/volumes/db/init/80-storage-buckets.sql for reference SQL
+
+-- ============================================
+-- Auth User Sync Trigger
+-- ============================================
+-- Automatically syncs new users from auth.users to public.users
+-- Triggers on INSERT to auth.users (when user signs up)
+
+-- Function to handle new user creation in public.users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  generated_username TEXT;
+  user_profile_picture TEXT;
+BEGIN
+  -- Use username from metadata or generate from email with random suffix
+  generated_username := COALESCE(
+    NEW.raw_user_meta_data->>'username',
+    split_part(NEW.email, '@', 1) || '_' || substr(md5(random()::text), 1, 4)
+  );
+  
+  -- Use profile picture from metadata or default
+  user_profile_picture := COALESCE(
+    NEW.raw_user_meta_data->>'profilePicture',
+    '/resources/default-profile.png'
+  );
+  
+  -- Insert new user into public.users table
+  INSERT INTO public.users (id, email, username, "profilePicture", "createdAt", "updatedAt")
+  VALUES (
+    NEW.id::text,
+    NEW.email,
+    generated_username,
+    user_profile_picture,
+    CURRENT_TIMESTAMP,
+    CURRENT_TIMESTAMP
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    "updatedAt" = CURRENT_TIMESTAMP;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Drop existing trigger if exists, then create new one
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_user();
+
+-- ============================================
+-- Sync Existing Auth Users (One-time migration)
+-- ============================================
+-- Insert any existing auth.users that don't exist in public.users
+INSERT INTO public.users (id, email, username, "profilePicture", "createdAt", "updatedAt")
+SELECT 
+  au.id::text,
+  au.email,
+  split_part(au.email, '@', 1) || '_' || substr(md5(random()::text), 1, 4),
+  '/resources/default-profile.png',
+  COALESCE(au.created_at, CURRENT_TIMESTAMP),
+  CURRENT_TIMESTAMP
+FROM auth.users au
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.users pu WHERE pu.id = au.id::text
+)
+ON CONFLICT (id) DO NOTHING;

@@ -20,12 +20,11 @@ export const initAuthListener = () => {
       currentUser.value = currentSession?.user || null
 
       if (currentSession?.user) {
-        // Fetch user profile from user-service microservice
+        // Fetch user profile from user-service microservice via Caddy proxy
         try {
-          const USER_SERVICE_URL = import.meta.env.VITE_USER_SERVICE_URL || 'http://localhost:3001'
           const token = currentSession.access_token
 
-          const response = await fetch(`${USER_SERVICE_URL}/api/users/${currentSession.user.id}`, {
+          const response = await fetch(`/api/users/${currentSession.user.id}`, {
             headers: {
               'Authorization': `Bearer ${token}`
             }
@@ -33,14 +32,12 @@ export const initAuthListener = () => {
 
           if (response.ok) {
             const userData = await response.json()
-            userProfile.value = {
-              ...userData,
-              uid: currentSession.user.id,
-              email: currentSession.user.email,
-              avatar: userData.profilePicture || '/resources/images/default-profile.png'
-            }
-
-            // Set window.currentUser for backward compatibility
+          userProfile.value = {
+            ...userData,
+            uid: currentSession.user.id,
+            email: currentSession.user.email,
+            avatar: userData.profilePicture || '/resources/images/default-profile.png'
+          }            // Set window.currentUser for backward compatibility
             window.currentUser = {
               id: currentSession.user.id,
               ...userData
@@ -227,6 +224,44 @@ export function useAuth() {
     }
   }
 
+  // Update user profile picture in global state
+  const updateProfilePicture = (newPictureUrl) => {
+    if (userProfile.value) {
+      userProfile.value = {
+        ...userProfile.value,
+        avatar: newPictureUrl,
+        profilePicture: newPictureUrl
+      }
+    }
+    if (window.currentUser) {
+      window.currentUser = {
+        ...window.currentUser,
+        avatar: newPictureUrl,
+        profilePicture: newPictureUrl
+      }
+      localStorage.setItem('currentUser', JSON.stringify(window.currentUser))
+    }
+    // Dispatch event so other components can react
+    window.dispatchEvent(new CustomEvent('profilePictureUpdated', { detail: { url: newPictureUrl } }))
+  }
+
+  // Update username in global state
+  const updateUsername = (newUsername) => {
+    if (userProfile.value) {
+      userProfile.value = {
+        ...userProfile.value,
+        username: newUsername
+      }
+    }
+    if (window.currentUser) {
+      window.currentUser = {
+        ...window.currentUser,
+        username: newUsername
+      }
+      localStorage.setItem('currentUser', JSON.stringify(window.currentUser))
+    }
+  }
+
   return {
     // State
     currentUser,
@@ -242,6 +277,8 @@ export function useAuth() {
     getCurrentUser,
     getToken,
     resetPassword,
-    updatePassword
+    updatePassword,
+    updateProfilePicture,
+    updateUsername
   }
 }

@@ -21,7 +21,8 @@ public class CorsConfig {
         CorsConfiguration config = new CorsConfiguration();
         
         config.setAllowCredentials(true);
-        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+        // Add http://localhost to allowed origins for Caddy proxy
+        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")[0], allowedOrigins.split(",").length > 1 ? allowedOrigins.split(",")[1] : "", "http://localhost"));
         config.setAllowedHeaders(Arrays.asList("*"));
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         
