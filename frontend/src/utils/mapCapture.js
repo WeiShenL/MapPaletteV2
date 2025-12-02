@@ -19,22 +19,24 @@ import html2canvas from 'html2canvas'
  */
 export const captureWithStaticAPI = async (waypoints, color, apiKey, userId, postId) => {
   try {
-    const width = 1200
-    const height = 800
+    const width = 600  // Max 640 without scale
+    const height = 400
 
-    // Build markers parameter (show all waypoints with labels)
+    // Build markers parameter - each marker needs its own markers= parameter for different labels
+    // Format: markers=color:red|label:A|lat,lng
     const markerParams = waypoints.map((wp, index) => {
       const label = String.fromCharCode(65 + index) // A, B, C, D...
-      return `markers=color:red%7Clabel:${label}%7C${wp.location.lat},${wp.location.lng}`
+      return `markers=color:red|label:${label}|${wp.location.lat},${wp.location.lng}`
     }).join('&')
 
     // Build path parameter (draw polyline)
-    const pathCoords = waypoints.map(wp => `${wp.location.lat},${wp.location.lng}`).join('%7C')
-    const pathColor = color.replace('#', '0x') // Convert #FF0000 to 0xFF0000
-    const pathParam = `path=color:${pathColor}%7Cweight:5%7C${pathCoords}`
+    // Format: path=color:0xFF0000|weight:5|lat1,lng1|lat2,lng2|...
+    const pathCoords = waypoints.map(wp => `${wp.location.lat},${wp.location.lng}`).join('|')
+    const pathColor = color.replace('#', '0x') + 'FF' // Add alpha for full opacity
+    const pathParam = `path=color:${pathColor}|weight:5|${pathCoords}`
 
-    // Construct Static Maps URL
-    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=${width}x${height}&${markerParams}&${pathParam}&key=${apiKey}`
+    // Construct Static Maps URL with scale=2 for higher resolution
+    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=${width}x${height}&scale=2&${markerParams}&${pathParam}&key=${apiKey}`
 
     console.log('Fetching static map from Google...')
 
@@ -112,15 +114,19 @@ export const captureWithCanvas = async (map, waypoints, markers, userId, postId)
       // For Advanced Markers, ensure they're on the map
       marker.map = map
       
-      // Update pin content with label
+      // Update pin content with label using glyphText (glyph is deprecated)
       const pinElement = new window.google.maps.marker.PinElement({
         background: '#FF6B6B',
         borderColor: '#FFFFFF',
         glyphColor: '#FFFFFF',
-        glyph: String.fromCharCode(65 + index), // A, B, C, D...
+        glyphText: String.fromCharCode(65 + index), // A, B, C, D...
         scale: 1.2
       })
-      marker.content = pinElement.element
+      // Clear existing content and append new pin
+      while (marker.firstChild) {
+        marker.removeChild(marker.firstChild)
+      }
+      marker.append(pinElement)
       marker.zIndex = 1000 + index
     })
 

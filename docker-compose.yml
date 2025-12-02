@@ -651,6 +651,8 @@ services:
       - "${LEADERBOARD_SERVICE_PORT:-3009}:8080"
     env_file:
       - .env
+    environment:
+      - USER_SERVICE_URL=http://user-service:5000
     networks:
       - mappalette-network
     volumes:

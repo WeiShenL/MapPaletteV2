@@ -467,12 +467,12 @@ export default {
     const addMarker = (latLng) => {
       const markerIndex = waypoints.value.length
 
-      // Create pin element with label
-      const pinBackground = new google.maps.marker.PinElement({
+      // Create pin element with label using glyphText (glyph is deprecated)
+      const pinElement = new google.maps.marker.PinElement({
         background: '#FF6B6B',
         borderColor: '#FFFFFF',
         glyphColor: '#FFFFFF',
-        glyph: `${markerIndex}`,
+        glyphText: `${markerIndex}`,
         scale: 1.2
       })
 
@@ -480,9 +480,11 @@ export default {
       const marker = new google.maps.marker.AdvancedMarkerElement({
         map: map.value,
         position: latLng,
-        content: pinBackground.element,
         title: `Waypoint ${markerIndex}`
       })
+      
+      // Append pin to marker (proper method per Google docs)
+      marker.append(pinElement)
 
       markers.value.push(marker)
     }
@@ -512,15 +514,20 @@ export default {
     // Update marker labels after removal (for Advanced Markers)
     const updateMarkerLabels = () => {
       markers.value.forEach((marker, index) => {
-        // Recreate pin element with updated label
-        const pinBackground = new google.maps.marker.PinElement({
+        // Clear existing content and recreate pin element with updated label
+        // Using glyphText instead of deprecated glyph
+        const pinElement = new google.maps.marker.PinElement({
           background: '#FF6B6B',
           borderColor: '#FFFFFF',
           glyphColor: '#FFFFFF',
-          glyph: `${index + 1}`,
+          glyphText: `${index + 1}`,
           scale: 1.2
         })
-        marker.content = pinBackground.element
+        // Clear and append new pin
+        while (marker.firstChild) {
+          marker.removeChild(marker.firstChild)
+        }
+        marker.append(pinElement)
       })
     }
     

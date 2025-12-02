@@ -6,11 +6,16 @@ const { validate, userIdSchema, followSchema, paginationSchema, uuidSchema } = r
 const { moderateLimiter, lenientLimiter, strictLimiter } = require('/app/shared/middleware/rateLimiter');
 const { asyncHandler } = require('/app/shared/middleware/errorHandler');
 
-// Schema for checking follow relationship
+// Schema for checking follow relationship - support both naming conventions
 const checkFollowQuerySchema = z.object({
-  followerId: uuidSchema,
-  followingId: uuidSchema,
-});
+  followerId: uuidSchema.optional(),
+  followingId: uuidSchema.optional(),
+  followerUserId: uuidSchema.optional(),
+  followingUserId: uuidSchema.optional(),
+}).refine(
+  data => (data.followerId || data.followerUserId) && (data.followingId || data.followingUserId),
+  { message: 'Both follower and following IDs are required' }
+);
 
 // Create follow relationship (moderate rate limit)
 // Note: Auth is handled at the composite service level (social-interaction-service)

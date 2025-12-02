@@ -111,22 +111,27 @@ const deleteFollow = async (req, res) => {
 
 // Check if user follows another user
 const checkFollow = async (req, res) => {
-  const { followerUserId, followingUserId } = req.query;
+  // Support both parameter naming conventions
+  const followerId = req.query.followerId || req.query.followerUserId;
+  const followingId = req.query.followingId || req.query.followingUserId;
 
-  if (!followerUserId || !followingUserId) {
-    return res.status(400).json({ error: 'Both followerUserId and followingUserId are required' });
+  if (!followerId || !followingId) {
+    return res.status(400).json({ error: 'Both followerId and followingId are required' });
   }
+
+  console.log(`[CHECK_FOLLOW] Checking if ${followerId} follows ${followingId}`);
 
   try {
     const follow = await db.follow.findUnique({
       where: {
         followerId_followingId: {
-          followerId: followerUserId,
-          followingId: followingUserId,
+          followerId: followerId,
+          followingId: followingId,
         }
       }
     });
 
+    console.log(`[CHECK_FOLLOW] Result: ${followerId} ${follow ? 'follows' : 'does not follow'} ${followingId}`);
     return res.json({ following: !!follow });
   } catch (error) {
     console.error(`[CHECK_FOLLOW] Error:`, error);
