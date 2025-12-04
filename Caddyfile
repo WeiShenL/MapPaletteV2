@@ -89,7 +89,7 @@
   }
 
   # Follow Service (port 5000)
-  handle /api/follows/* {
+  handle /api/follow/* {
     reverse_proxy follow-service:5000 {
       import api_proxy
       health_uri /health
@@ -334,7 +334,7 @@ https://{$DOMAIN} {
   }
 
   # Follow Service
-  handle /api/follows/* {
+  handle /api/follow/* {
     reverse_proxy follow-service:5000 {
       header_up X-Real-IP {remote_host}
       header_up X-Forwarded-For {remote_host}
