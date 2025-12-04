@@ -170,7 +170,7 @@ services:
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
     volumes:
-      - ./supabase/kong.yml:/usr/local/kong/config/kong.yml:ro
+      - ./backend/db/kong.yml:/usr/local/kong/config/kong.yml:ro
     networks:
       - mappalette-network
 
