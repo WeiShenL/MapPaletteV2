@@ -11,7 +11,7 @@ const { db } = require('/app/shared/utils/db');
 // Create test app
 const app = express();
 app.use(express.json());
-app.use('/api', postRoutes);
+app.use('/api/posts', postRoutes);
 
 describe('Post Service Integration Tests', () => {
   let testUser;

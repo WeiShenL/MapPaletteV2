@@ -7,8 +7,68 @@ import { uploadFile, uploadBase64Image, BUCKETS } from '@/lib/storage'
 import html2canvas from 'html2canvas'
 
 /**
- * METHOD 1: Google Static Maps API (RECOMMENDED)
- * Best quality, automatic marker rendering, fastest
+ * METHOD 1: Google Static Maps API with Encoded Polyline (RECOMMENDED)
+ * - Uses encoded polyline from Directions API for road-following routes
+ * - Auto-centers and auto-zooms to fit the route
+ * - No pins/markers for a clean look
+ *
+ * @param {string} encodedPolyline - Encoded polyline string from Directions API
+ * @param {string} color - Route color (hex format like "#FF0000")
+ * @param {string} apiKey - Google Maps API key
+ * @param {string} userId - User ID for storage path
+ * @param {string} postId - Post ID for filename
+ * @returns {Promise<string>} - Uploaded image URL
+ */
+export const captureWithEncodedPolyline = async (encodedPolyline, color, apiKey, userId, postId) => {
+  try {
+    const width = 600  // Max 640 without scale
+    const height = 400
+
+    // Convert hex color to format required by Static Maps API (0xRRGGBBFF for fully opaque)
+    const pathColor = color.replace('#', '0x') + 'FF'
+
+    // Construct Static Map URL:
+    // - Use enc: prefix for encoded polyline (follows roads exactly)
+    // - NO center/zoom params = auto-fit to route bounds
+    // - NO markers param = clean map without pins
+    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?` +
+      `size=${width}x${height}` +
+      `&scale=2` + // High resolution
+      `&path=color:${pathColor}|weight:5|enc:${encodeURIComponent(encodedPolyline)}` +
+      `&key=${apiKey}`
+
+    console.log('Fetching static map with encoded polyline (road-following route)...')
+
+    // Fetch the image
+    const response = await fetch(staticMapUrl)
+
+    if (!response.ok) {
+      throw new Error(`Static Maps API error: ${response.statusText}`)
+    }
+
+    const blob = await response.blob()
+
+    // Upload directly to Supabase Storage
+    const path = `${userId}/route/route_${postId}_${Date.now()}.jpg`
+    const uploadResult = await uploadFile(blob, BUCKETS.ROUTE_IMAGES, path)
+
+    if (!uploadResult.success) {
+      throw new Error(uploadResult.error)
+    }
+
+    console.log('✅ Static API capture with encoded polyline successful:', uploadResult.url)
+    return uploadResult.url
+
+  } catch (error) {
+    console.error('Encoded polyline capture failed:', error)
+    throw error
+  }
+}
+
+/**
+ * METHOD 2: Google Static Maps API with waypoints (FALLBACK)
+ * - Uses individual waypoint coordinates (straight lines between points)
+ * - Only used if encoded polyline is not available
  *
  * @param {Array} waypoints - Array of waypoint objects with location {lat, lng}
  * @param {string} color - Route color (hex format like "#FF0000")
@@ -22,23 +82,19 @@ export const captureWithStaticAPI = async (waypoints, color, apiKey, userId, pos
     const width = 600  // Max 640 without scale
     const height = 400
 
-    // Build markers parameter - each marker needs its own markers= parameter for different labels
-    // Format: markers=color:red|label:A|lat,lng
-    const markerParams = waypoints.map((wp, index) => {
-      const label = String.fromCharCode(65 + index) // A, B, C, D...
-      return `markers=color:red|label:${label}|${wp.location.lat},${wp.location.lng}`
-    }).join('&')
-
-    // Build path parameter (draw polyline)
-    // Format: path=color:0xFF0000|weight:5|lat1,lng1|lat2,lng2|...
+    // Build path parameter (draw polyline) - straight lines between waypoints
+    // Format: path=color:0xFF0000FF|weight:5|lat1,lng1|lat2,lng2|...
     const pathCoords = waypoints.map(wp => `${wp.location.lat},${wp.location.lng}`).join('|')
-    const pathColor = color.replace('#', '0x') + 'FF' // Add alpha for full opacity
-    const pathParam = `path=color:${pathColor}|weight:5|${pathCoords}`
+    const pathColor = color.replace('#', '0x') + 'FF'  // FF = fully opaque
+    
+    // NO center/zoom = auto-fit, NO markers = clean look
+    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?` +
+      `size=${width}x${height}` +
+      `&scale=2` +
+      `&path=color:${pathColor}|weight:5|${pathCoords}` +
+      `&key=${apiKey}`
 
-    // Construct Static Maps URL with scale=2 for higher resolution
-    const staticMapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=${width}x${height}&scale=2&${markerParams}&${pathParam}&key=${apiKey}`
-
-    console.log('Fetching static map from Google...')
+    console.log('Fetching static map with waypoints (fallback - straight lines)...')
 
     // Fetch the image
     const response = await fetch(staticMapUrl)
@@ -204,7 +260,11 @@ export const captureWithCanvas = async (map, waypoints, markers, userId, postId)
 }
 
 /**
- * Auto-selecting capture method (tries Static API first, falls back to canvas)
+ * Auto-selecting capture method
+ * Priority:
+ * 1. Encoded polyline (road-following, auto-centered, no pins) - BEST
+ * 2. Static API with waypoints (straight lines, fallback)
+ * 3. html2canvas (last resort)
  *
  * @param {Object} params - Capture parameters
  * @returns {Promise<string>} - Uploaded image URL
@@ -217,21 +277,30 @@ export const captureMap = async (params) => {
     userId,
     postId,
     map,
-    markers
+    markers,
+    encodedPolyline // New: encoded polyline from Directions API
   } = params
 
   try {
-    // Try Static API first (recommended)
+    // Method 1: Use encoded polyline if available (BEST - follows roads exactly)
+    if (encodedPolyline) {
+      console.log('Using encoded polyline for road-following route capture...')
+      return await captureWithEncodedPolyline(encodedPolyline, color, apiKey, userId, postId)
+    }
+    
+    // Method 2: Fall back to waypoints (straight lines between points)
+    console.log('No encoded polyline available, using waypoints (straight lines)...')
     return await captureWithStaticAPI(waypoints, color, apiKey, userId, postId)
   } catch (staticError) {
     console.warn('Static API failed, falling back to canvas:', staticError)
 
-    // Fallback to canvas method
+    // Method 3: Last resort - canvas capture
     return await captureWithCanvas(map, waypoints, markers, userId, postId)
   }
 }
 
 export default {
+  captureWithEncodedPolyline,
   captureWithStaticAPI,
   captureWithCanvas,
   captureMap

@@ -102,14 +102,16 @@ const postIdSchema = z.object({
 });
 
 const createPostSchema = z.object({
-  name: z.string().min(1).max(100),
+  title: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
-  routeData: z.record(z.any()), // JSON object
-  distance: z.number().positive().optional(),
-  duration: z.number().positive().optional(),
-  difficulty: z.enum(['easy', 'moderate', 'hard']).optional(),
-  isPublic: z.boolean().default(true),
-  tags: z.array(z.string()).max(10).optional(),
+  waypoints: z.any(), // Can be string or array of waypoint objects
+  color: z.string().optional(),
+  region: z.string().optional(),
+  distance: z.union([z.string(), z.number()]).optional(), // Can be string or number
+  imageUrl: z.string().url().optional(),
+  image: z.string().url().optional(), // Alias for imageUrl
+  userID: uuidSchema.optional(), // User ID (also in params)
+  username: z.string().optional(),
 });
 
 const updatePostSchema = z.object({

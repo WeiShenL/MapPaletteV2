@@ -45,8 +45,9 @@ const createMapGenerationLimiter = () => {
       success: false,
       error: {
         code: 'RATE_LIMIT_EXCEEDED',
-        message: 'Too many map image generations. Please wait before creating more posts with routes.',
+        message: 'Rate limit exceeded: Maximum 50 posts per hour. Please wait before creating more posts.',
         retryAfter: '1 hour',
+        limit: 50,
       },
     },
     standardHeaders: true,
@@ -57,7 +58,9 @@ const createMapGenerationLimiter = () => {
     },
     // Custom handler for rate limit exceeded
     handler: (req, res) => {
-      const retryAfter = Math.ceil(req.rateLimit.resetTime.getTime() / 1000);
+      const resetTime = req.rateLimit.resetTime;
+      const minutesRemaining = Math.ceil((resetTime.getTime() - Date.now()) / 60000);
+      const retryAfterText = minutesRemaining > 1 ? `${minutesRemaining} minutes` : '1 minute';
 
       if (global.logger) {
         global.logger.warn('Map generation rate limit exceeded', {
@@ -73,11 +76,11 @@ const createMapGenerationLimiter = () => {
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many map image generations. Please wait before creating more posts with routes.',
+          message: `Rate limit exceeded: Maximum ${req.rateLimit.limit} posts per hour. Please try again in ${retryAfterText}.`,
           limit: req.rateLimit.limit,
           current: req.rateLimit.current,
           resetTime: req.rateLimit.resetTime,
-          retryAfter,
+          retryAfter: retryAfterText,
         },
       });
     },

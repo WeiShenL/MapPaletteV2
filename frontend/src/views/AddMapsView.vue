@@ -247,7 +247,7 @@ import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
 import { userProfile } from '@/services/authService'
 import { useAuth } from '@/composables/useAuth'
-import axios from 'axios'
+import axios from '@/lib/axios'
 import { driver } from 'driver.js'
 import 'driver.js/dist/driver.css'
 import html2canvas from 'html2canvas'
@@ -279,6 +279,7 @@ export default {
     const geocoder = shallowRef(null)
     const colors = ref(['#e81416','#ffa500','#faeb36','#79c314','#487de7','#4b369d','#70369d'])
     const mapsApiKey = ref('')
+    const encodedPolyline = ref('') // Store the encoded polyline for static map capture
     
     // Alert related
     const showAlert = ref(false)
@@ -295,7 +296,7 @@ export default {
     const username = ref('')
     const submitting = ref(false)
     const formValidated = ref(false)
-    const POST_SERVICE_URL = ref((import.meta.env.VITE_POST_SERVICE_URL || 'http://localhost:3002') + '/api')
+    const POST_SERVICE_URL = ref(import.meta.env.VITE_POST_SERVICE_URL || 'http://localhost:3002/api')
     const deleteCountdown = ref(0)
     const deleteTimeout = ref(null)
     const deleteModalTitle = ref("Delete post?")
@@ -623,6 +624,11 @@ export default {
             path: response.routes[0].overview_path,
             strokeColor: currentColor.value
           })
+          // Store the encoded polyline for static map capture
+          // This allows the Static Maps API to draw the exact road route
+          if (response.routes[0].overview_polyline) {
+            encodedPolyline.value = response.routes[0].overview_polyline
+          }
         } else {
           setAlert('error', 'Directions request failed due to ' + status)
         }
@@ -758,7 +764,7 @@ export default {
           color: currentColor.value,
           distance: totalDistance.value,
           region: region.value,
-          image: image.value
+          imageUrl: image.value
         })
 
         if (response.data.id) {
@@ -777,7 +783,40 @@ export default {
         }
       } catch (error) {
         console.error('Error creating post:', error)
-        setAlert('error', 'An error occurred while creating the post.')
+        
+        // Provide descriptive error messages based on status code
+        let errorMessage = 'An error occurred while creating the post.'
+        
+        if (error.response) {
+          const status = error.response.status
+          const data = error.response.data
+          
+          switch (status) {
+            case 400:
+              errorMessage = data?.message || 'Invalid post data. Please check your title and route.'
+              break
+            case 401:
+              errorMessage = 'You must be logged in to create a post. Please log in and try again.'
+              break
+            case 403:
+              errorMessage = 'You do not have permission to create this post.'
+              break
+            case 429:
+              // Rate limit exceeded
+              const retryAfter = data?.error?.retryAfter || '1 hour'
+              errorMessage = `Rate limit exceeded. You can create up to 50 posts per hour. Please try again in ${retryAfter}.`
+              break
+            case 500:
+              errorMessage = 'Server error. Please try again later.'
+              break
+            default:
+              errorMessage = data?.message || `Request failed (Error ${status}). Please try again.`
+          }
+        } else if (error.code === 'ERR_NETWORK') {
+          errorMessage = 'Network error. Please check your internet connection.'
+        }
+        
+        setAlert('error', errorMessage)
       } finally {
         submitting.value = false
       }
@@ -807,7 +846,8 @@ export default {
           userId: userID.value,
           postId,
           map: map.value,
-          markers: markers.value
+          markers: markers.value,
+          encodedPolyline: encodedPolyline.value // Pass encoded polyline for road-following route
         })
 
         image.value = imageUrl

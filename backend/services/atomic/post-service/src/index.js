@@ -45,8 +45,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Routes
-app.use('/api', postRoutes);
+// Routes - mounted at /api/posts to match Caddy reverse proxy config
+app.use('/api/posts', postRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

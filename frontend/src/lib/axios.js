@@ -10,15 +10,20 @@ const axiosInstance = axios.create({
   }
 })
 
-// Request interceptor - Add JWT token to all requests
+// Request interceptor - Add JWT token to internal API requests only
 axiosInstance.interceptors.request.use(
   async (config) => {
     try {
-      // Get current session from Supabase
-      const { data: { session } } = await supabase.auth.getSession()
+      // Only add auth headers for internal API requests (not external APIs like Google)
+      const isExternalUrl = config.url?.startsWith('http') && !config.url?.includes('localhost')
+      
+      if (!isExternalUrl) {
+        // Get current session from Supabase
+        const { data: { session } } = await supabase.auth.getSession()
 
-      if (session?.access_token) {
-        config.headers.Authorization = `Bearer ${session.access_token}`
+        if (session?.access_token) {
+          config.headers.Authorization = `Bearer ${session.access_token}`
+        }
       }
 
       console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`)
