@@ -708,9 +708,11 @@ services:
         - VITE_FEED_SERVICE_URL=${VITE_FEED_SERVICE_URL:-http://localhost/api/feed}
         - VITE_USER_SERVICE_URL=${VITE_USER_SERVICE_URL:-http://localhost/api/users}
         - VITE_POST_SERVICE_URL=${VITE_POST_SERVICE_URL:-http://localhost/api/posts}
-        # Google Maps
+        # Google Maps (both with and without VITE_ prefix)
         - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
-        - GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID:-DEMO_MAP_ID}
+        - GOOGLE_MAPS_MAP_ID=${GOOGLE_MAPS_MAP_ID}
+        - VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
+        - VITE_GOOGLE_MAPS_MAP_ID=${VITE_GOOGLE_MAPS_MAP_ID}
         # Application
         - VITE_APP_NAME=MapPalette
         - VITE_APP_URL=${VITE_APP_URL:-http://localhost:3000}

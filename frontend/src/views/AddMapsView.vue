@@ -241,7 +241,7 @@
 </template>
 
 <script>
-import { ref, onMounted, computed } from 'vue'
+import { ref, shallowRef, toRaw, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
@@ -266,15 +266,17 @@ export default {
     const route = useRoute()
     
     // Data - lifted from addMaps.js
-    const map = ref(null)
-    const directionsService = ref(null)
-    const directionsRenderer = ref(null)
-    const routePolyline = ref(null)
+    // Use shallowRef for Google Maps objects to prevent Vue's Proxy from wrapping them
+    // This is critical for Advanced Markers to work properly
+    const map = shallowRef(null)
+    const directionsService = shallowRef(null)
+    const directionsRenderer = shallowRef(null)
+    const routePolyline = shallowRef(null)
     const waypoints = ref([])
-    const markers = ref([])
+    const markers = shallowRef([])
     const currentColor = ref('#e81416')
     const totalDistance = ref(0)
-    const geocoder = ref(null)
+    const geocoder = shallowRef(null)
     const colors = ref(['#e81416','#ffa500','#faeb36','#79c314','#487de7','#4b369d','#70369d'])
     const mapsApiKey = ref('')
     
@@ -315,19 +317,20 @@ export default {
     // Load Google Maps API key from environment
     const loadGoogleMapsScript = async () => {
       try {
-        // Use environment variable for API key
-        const apiKey = import.meta.env.GOOGLE_MAPS_API_KEY
+        // Use environment variable for API key (Vite requires VITE_ prefix)
+        const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
         if (!apiKey || apiKey.startsWith('your')) {
-          throw new Error('Google Maps API key not configured. Please set GOOGLE_MAPS_API_KEY in .env file.')
+          throw new Error('Google Maps API key not configured. Please set VITE_GOOGLE_MAPS_API_KEY in .env file.')
         }
 
         mapsApiKey.value = apiKey
 
         // Dynamically load Google Maps script with marker library for Advanced Markers
+        // Using loading=async parameter as per Google's latest requirements
         return new Promise((resolve, reject) => {
           const script = document.createElement('script')
-          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places,marker`
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places,marker&loading=async`
           script.async = true
           script.defer = true
           script.onload = resolve
@@ -341,8 +344,8 @@ export default {
     }
     
     // Initialize Google Maps
-    const initMap = () => {
-      const mapId = import.meta.env.GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+    const initMap = async () => {
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
 
       map.value = new google.maps.Map(document.getElementById("map"), {
         mapId: mapId, // Required for Advanced Markers API (google.maps.Marker deprecated Feb 2024)
@@ -352,28 +355,24 @@ export default {
         streetViewControl: false,
         mapTypeControl: false,
         gestureHandling: 'greedy',
-        styles: [
-          {
-            "featureType": "road.highway",
-            "elementType": "geometry",
-            "stylers": [{ "visibility": "off" }]
-          },
-          {
-            "featureType": "poi",
-            "elementType": "labels",
-            "stylers": [{ "visibility": "off" }]
-          },
-          {
-            "featureType": "poi.business",
-            "stylers": [{ "visibility": "off" }]
-          },
-          {
-            "featureType": "transit.station.bus",
-            "stylers": [{ "visibility": "off" }]
-          }
-        ],
+        // Note: styles property cannot be set when mapId is present
+        // Custom map styling should be configured in Google Cloud Console
+        // and associated with the mapId
       })
-    
+
+      // Import marker library for Advanced Markers API
+      try {
+        const { AdvancedMarkerElement, PinElement } = await google.maps.importLibrary("marker")
+        // Store in window for access in other functions
+        window.AdvancedMarkerElement = AdvancedMarkerElement
+        window.PinElement = PinElement
+        console.log('✅ Advanced Marker library loaded successfully')
+        console.log('Map ID being used:', mapId)
+      } catch (error) {
+        console.error('Failed to load Advanced Marker library:', error)
+        setAlert('error', 'Failed to load map markers. Please refresh the page.')
+      }
+
       directionsService.value = new google.maps.DirectionsService()
       directionsRenderer.value = new google.maps.DirectionsRenderer({
         suppressMarkers: true,
@@ -388,30 +387,29 @@ export default {
     
       geocoder.value = new google.maps.Geocoder()
 
-      // Initialize search box
+      // Initialize autocomplete (replaces deprecated SearchBox)
       const input = document.getElementById("pac-input")
-      const searchBox = new google.maps.places.SearchBox(input)
+      const autocomplete = new google.maps.places.Autocomplete(input)
 
-      map.value.addListener("bounds_changed", () => {
-        searchBox.setBounds(map.value.getBounds())
-      })
+      // Bind autocomplete to map bounds to bias search results to viewport
+      autocomplete.bindTo("bounds", map.value)
 
-      searchBox.addListener("places_changed", () => {
-        const places = searchBox.getPlaces()
-        
-        if (places.length === 0) {
-          return
-        }
-        
-        const place = places[0]
-        
+      // Listen for place selection
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace()
+
         if (!place.geometry || !place.geometry.location) {
-          console.log("Returned place contains no geometry")
+          console.log("No geometry available for the selected place")
           return
         }
-        
-        map.value.setCenter(place.geometry.location)
-        map.value.setZoom(18)
+
+        // Center map on selected location
+        if (place.geometry.viewport) {
+          map.value.fitBounds(place.geometry.viewport)
+        } else {
+          map.value.setCenter(place.geometry.location)
+          map.value.setZoom(18)
+        }
       })
     
       // Listen for clicks on the map to add waypoints
@@ -465,28 +463,58 @@ export default {
     
     // Add marker to map using Advanced Markers API (google.maps.Marker deprecated Feb 2024)
     const addMarker = (latLng) => {
+      console.log('🔍 addMarker called with:', latLng)
+
+      // Check if marker library is loaded
+      if (!window.AdvancedMarkerElement || !window.PinElement) {
+        console.error('❌ Advanced Marker library not loaded yet')
+        console.log('AdvancedMarkerElement:', window.AdvancedMarkerElement)
+        console.log('PinElement:', window.PinElement)
+        return
+      }
+
       const markerIndex = waypoints.value.length
+      console.log(`📍 Creating marker #${markerIndex}`)
 
-      // Create pin element with label using glyphText (glyph is deprecated)
-      const pinElement = new google.maps.marker.PinElement({
-        background: '#FF6B6B',
-        borderColor: '#FFFFFF',
-        glyphColor: '#FFFFFF',
-        glyphText: `${markerIndex}`,
-        scale: 1.2
-      })
+      try {
+        // Create pin element with numbered label using glyphText
+        // Use the current route color for the pin background
+        const pinElement = new window.PinElement({
+          background: currentColor.value,
+          borderColor: '#FFFFFF',
+          glyphColor: '#FFFFFF',
+          glyphText: `${markerIndex}`,
+          scale: 1.2
+        })
+        console.log('✅ PinElement created:', pinElement)
 
-      // Create advanced marker
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        map: map.value,
-        position: latLng,
-        title: `Waypoint ${markerIndex}`
-      })
-      
-      // Append pin to marker (proper method per Google docs)
-      marker.append(pinElement)
+        // Get the raw map object (unwrap from Vue's Proxy)
+        // This is critical for Advanced Markers to work properly with Vue 3
+        const rawMap = toRaw(map.value)
+        console.log('📍 Raw map object:', rawMap)
 
-      markers.value.push(marker)
+        // Create advanced marker with pin as content
+        // Use LatLng directly - AdvancedMarkerElement accepts LatLng objects
+        const marker = new window.AdvancedMarkerElement({
+          map: rawMap, // Use raw map object instead of Vue Proxy
+          position: latLng, // Use LatLng object directly
+          title: `Waypoint ${markerIndex}`,
+          content: pinElement.element, // Use element property to get DOM node
+          gmpClickable: true, // Enable marker to be clickable
+          zIndex: 1000 // Ensure marker appears above map
+        })
+        console.log('✅ AdvancedMarkerElement created:', marker)
+        console.log('Marker position:', marker.position)
+        console.log('Marker map:', marker.map)
+        console.log('Marker content:', marker.content)
+        console.log('Map zoom:', map.value.getZoom())
+        console.log('Map bounds:', map.value.getBounds())
+
+        markers.value.push(marker)
+        console.log(`✅ Marker #${markerIndex} added to array. Total markers: ${markers.value.length}`)
+      } catch (error) {
+        console.error('❌ Error creating marker:', error)
+      }
     }
     
     // Remove waypoint
@@ -513,21 +541,47 @@ export default {
     
     // Update marker labels after removal (for Advanced Markers)
     const updateMarkerLabels = () => {
+      // Check if marker library is loaded
+      if (!window.PinElement) {
+        console.error('PinElement library not loaded yet')
+        return
+      }
+
       markers.value.forEach((marker, index) => {
-        // Clear existing content and recreate pin element with updated label
-        // Using glyphText instead of deprecated glyph
-        const pinElement = new google.maps.marker.PinElement({
-          background: '#FF6B6B',
+        // Recreate pin element with updated numbered label and current color
+        const pinElement = new window.PinElement({
+          background: currentColor.value,
           borderColor: '#FFFFFF',
           glyphColor: '#FFFFFF',
           glyphText: `${index + 1}`,
           scale: 1.2
         })
-        // Clear and append new pin
-        while (marker.firstChild) {
-          marker.removeChild(marker.firstChild)
-        }
-        marker.append(pinElement)
+
+        // Update marker content with new pin element
+        marker.content = pinElement.element
+      })
+    }
+    
+    // Update all marker colors to match current route color
+    const updateMarkerColors = () => {
+      // Check if marker library is loaded
+      if (!window.PinElement) {
+        console.error('PinElement library not loaded yet')
+        return
+      }
+
+      markers.value.forEach((marker, index) => {
+        // Recreate pin element with new color
+        const pinElement = new window.PinElement({
+          background: currentColor.value,
+          borderColor: '#FFFFFF',
+          glyphColor: '#FFFFFF',
+          glyphText: `${index + 1}`,
+          scale: 1.2
+        })
+
+        // Update marker content with new colored pin element
+        marker.content = pinElement.element
       })
     }
     
@@ -537,6 +591,8 @@ export default {
       if (routePolyline.value) {
         routePolyline.value.setOptions({ strokeColor: currentColor.value })
       }
+      // Update all marker colors to match the new route color
+      updateMarkerColors()
     }
     
     // Calculate and display route
@@ -829,40 +885,24 @@ export default {
       }, 100)
     }
     
-    // Marker bounce effects
+    // Marker bounce effects using CSS animation
     const startMarkerBounce = (index) => {
       if (submitting.value) return
-      
+
       const marker = markers.value[index]
-      if (marker && !marker.bounceInterval) {
-        bounceMarker(marker)
+      if (marker && marker.content) {
+        // Add CSS class to trigger jump animation on the pin element
+        // marker.content is the gmp-pin element
+        marker.content.classList.add('marker-bounce')
       }
     }
-    
+
     const stopMarkerBounce = (index) => {
       const marker = markers.value[index]
-      if (marker && marker.bounceInterval) {
-        clearInterval(marker.bounceInterval)
-        marker.bounceInterval = null
-        marker.position = marker.originalPosition
+      if (marker && marker.content) {
+        // Remove CSS class to stop jump animation
+        marker.content.classList.remove('marker-bounce')
       }
-    }
-
-    const bounceMarker = (marker) => {
-      const bounceHeight = 0.00015
-      const bounceSpeed = 300
-      let direction = 1
-
-      // Advanced Markers use position property directly
-      marker.originalPosition = { lat: marker.position.lat, lng: marker.position.lng }
-
-      marker.bounceInterval = setInterval(() => {
-        const position = marker.position
-        const newLat = position.lat + (bounceHeight * direction)
-        direction *= -1
-
-        marker.position = { lat: newLat, lng: position.lng }
-      }, bounceSpeed)
     }
     
     // Fetch existing map data for editing
@@ -1302,4 +1342,25 @@ export default {
 
 <style scoped>
 @import '@/assets/styles/add-maps.css';
+</style>
+
+<!-- Non-scoped styles for Google Maps marker animations -->
+<!-- These must be global because marker elements are created outside Vue's scope -->
+<style>
+/* Advanced Marker Jump Animation - must be global for Google Maps elements */
+@keyframes marker-jump {
+  0%, 100% {
+    top: 0;
+  }
+  50% {
+    top: -30px;
+  }
+}
+
+/* Target the gmp-pin element inside advanced markers */
+gmp-pin.marker-bounce,
+.marker-bounce {
+  position: relative !important;
+  animation: marker-jump 0.5s ease-in-out infinite !important;
+}
 </style>

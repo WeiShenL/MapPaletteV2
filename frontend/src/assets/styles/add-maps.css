@@ -219,3 +219,17 @@ textarea {
   height: 50px;
   animation: spinner 1s linear infinite;
 }
+
+/* Advanced Marker Jump Animation */
+@keyframes marker-jump {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-20px);
+  }
+}
+
+.marker-bounce {
+  animation: marker-jump 0.6s ease-in-out infinite;
+}
