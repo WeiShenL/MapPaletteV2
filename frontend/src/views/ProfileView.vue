@@ -291,8 +291,9 @@ export default {
     const loadUserProfile = async (userId) => {
       try {
         // Get complete profile data in ONE call
-        const profileData = await profileService.getUserProfile(userId, currentUser.value.id)
-        
+        // currentUserId is now extracted from JWT token on backend
+        const profileData = await profileService.getUserProfile(userId)
+
         // Set user profile data
         userProfile.value = {
           name: profileData.user.username,
@@ -337,7 +338,8 @@ export default {
     const loadCurrentUserProfile = async () => {
       try {
         // Get complete profile data in ONE call (same as other users)
-        const profileData = await profileService.getUserProfile(currentUser.value.id, currentUser.value.id)
+        // currentUserId is now extracted from JWT token on backend
+        const profileData = await profileService.getUserProfile(currentUser.value.id)
         
         // Set user profile data
         userProfile.value = {

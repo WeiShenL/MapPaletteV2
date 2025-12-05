@@ -15,10 +15,8 @@ const FOLLOW_SERVICE_URL = `${FOLLOW_SERVICE_BASE}/api/follow`;
 // Get complete profile data for a user
 exports.getUserProfile = async (req, res) => {
   const { userId } = req.params;
-  const { currentUserId } = req.query; // For follow status and privacy checks
-  
-  console.log(`[GET_PROFILE] Fetching profile for user ${userId} (viewer: ${currentUserId || 'anonymous'})`);
-  
+  const currentUserId = req.user?.id; // Extract from JWT token via optionalAuth middleware
+
   try {
     // Step 1: Get user details and posts in parallel
     let user, userPosts;
@@ -48,6 +46,7 @@ exports.getUserProfile = async (req, res) => {
     
     // Step 2: Get follow status (if viewing another user's profile)
     let followStatus = { isFollowing: false };
+
     if (currentUserId && currentUserId !== userId) {
       try {
         const followResponse = await axios.get(`${FOLLOW_SERVICE_URL}/check`, {
@@ -56,7 +55,7 @@ exports.getUserProfile = async (req, res) => {
         // Map 'following' from follow-service to 'isFollowing' for frontend
         followStatus = { isFollowing: followResponse.data.following || false };
       } catch (error) {
-        console.log(`[GET_PROFILE] Failed to get follow status for ${currentUserId} -> ${userId}`);
+        console.error(`Failed to get follow status:`, error.message);
       }
     }
     
@@ -83,7 +82,7 @@ exports.getUserProfile = async (req, res) => {
             interactions.comments = commentsResponse.data;
             interactions.shares = sharesResponse.data;
           } catch (error) {
-            console.log(`[GET_PROFILE] Failed to get interactions for post ${postId}`);
+            console.error(`Failed to get interactions for post ${postId}`);
           }
         }
         
@@ -133,9 +132,8 @@ exports.getUserProfile = async (req, res) => {
     
     // Step 4: Calculate profile stats
     const totalDistance = userPosts.reduce((sum, post) => sum + (parseFloat(post.distance) || 0), 0);
-    
+
     // Step 5: Return complete profile data
-    console.log(`[GET_PROFILE] Successfully fetched profile for user ${userId} with ${enrichedPosts.length} posts`);
     return res.status(200).json({
       // User details
       user: {
@@ -173,19 +171,13 @@ exports.getUserProfile = async (req, res) => {
           image: post.image
         }))
     });
-    
+
   } catch (error) {
-    console.error(`[GET_PROFILE] Error fetching profile for user ${userId}:`, error);
-    console.error('Error details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status,
-      url: error.config?.url
-    });
-    return res.status(500).json({ 
-      message: 'Error fetching user profile', 
+    console.error(`Error fetching profile for user ${userId}:`, error.message);
+    return res.status(500).json({
+      message: 'Error fetching user profile',
       error: error.message,
-      details: error.response?.data 
+      details: error.response?.data
     });
   }
 };
@@ -193,10 +185,8 @@ exports.getUserProfile = async (req, res) => {
 // Get user's followers
 exports.getUserFollowers = async (req, res) => {
   const { userId } = req.params;
-  const { currentUserId } = req.query;
-  
-  console.log(`[GET_FOLLOWERS] Fetching followers for user ${userId}`);
-  
+  const currentUserId = req.user?.id; // Extract from JWT token via optionalAuth middleware
+
   try {
     // Get user's followers list from user service
     const followersResponse = await axios.get(`${USER_SERVICE_URL}/followers/${userId}`);
@@ -217,7 +207,7 @@ exports.getUserFollowers = async (req, res) => {
               });
               isFollowing = followResponse.data.isFollowing;
             } catch (error) {
-              console.log(`[GET_FOLLOWERS] Failed to check follow status`);
+              // Silently fail
             }
           }
           
@@ -229,7 +219,6 @@ exports.getUserFollowers = async (req, res) => {
             isFollowing: isFollowing
           };
         } catch (error) {
-          console.log(`[GET_FOLLOWERS] Failed to enrich follower data for ${followerData.userID || followerData.id}`);
           return null;
         }
       })
@@ -237,18 +226,17 @@ exports.getUserFollowers = async (req, res) => {
     
     // Filter out any null values
     const validFollowers = enrichedFollowers.filter(f => f !== null);
-    
-    console.log(`[GET_FOLLOWERS] Returning ${validFollowers.length} followers for user ${userId}`);
+
     return res.status(200).json({
       followers: validFollowers,
       count: validFollowers.length
     });
-    
+
   } catch (error) {
-    console.error(`[GET_FOLLOWERS] Error fetching followers for user ${userId}:`, error);
-    return res.status(500).json({ 
-      message: 'Error fetching followers', 
-      error: error.message 
+    console.error(`Error fetching followers for user ${userId}:`, error.message);
+    return res.status(500).json({
+      message: 'Error fetching followers',
+      error: error.message
     });
   }
 };
@@ -256,10 +244,8 @@ exports.getUserFollowers = async (req, res) => {
 // Get users that the user is following
 exports.getUserFollowing = async (req, res) => {
   const { userId } = req.params;
-  const { currentUserId } = req.query;
-  
-  console.log(`[GET_FOLLOWING] Fetching following list for user ${userId}`);
-  
+  const currentUserId = req.user?.id; // Extract from JWT token via optionalAuth middleware
+
   try {
     // Get user's following list from user service
     const followingResponse = await axios.get(`${USER_SERVICE_URL}/following/${userId}`);
@@ -280,7 +266,7 @@ exports.getUserFollowing = async (req, res) => {
               });
               isFollowing = followResponse.data.isFollowing;
             } catch (error) {
-              console.log(`[GET_FOLLOWING] Failed to check follow status`);
+              // Silently fail
             }
           }
           
@@ -292,7 +278,6 @@ exports.getUserFollowing = async (req, res) => {
             isFollowing: isFollowing
           };
         } catch (error) {
-          console.log(`[GET_FOLLOWING] Failed to enrich following data for ${followingData.userID || followingData.id}`);
           return null;
         }
       })
@@ -300,18 +285,17 @@ exports.getUserFollowing = async (req, res) => {
     
     // Filter out any null values
     const validFollowing = enrichedFollowing.filter(f => f !== null);
-    
-    console.log(`[GET_FOLLOWING] Returning ${validFollowing.length} following for user ${userId}`);
+
     return res.status(200).json({
       following: validFollowing,
       count: validFollowing.length
     });
-    
+
   } catch (error) {
-    console.error(`[GET_FOLLOWING] Error fetching following for user ${userId}:`, error);
-    return res.status(500).json({ 
-      message: 'Error fetching following', 
-      error: error.message 
+    console.error(`Error fetching following for user ${userId}:`, error.message);
+    return res.status(500).json({
+      message: 'Error fetching following',
+      error: error.message
     });
   }
 };
