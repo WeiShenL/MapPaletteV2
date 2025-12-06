@@ -2,6 +2,25 @@ const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
 const { renderMapFromPost, calculateWaypointsHash } = require('/app/shared/utils/googleMapsRenderer');
 const { uploadRouteImage, uploadOptimizedRouteImage } = require('/app/shared/utils/storageService');
+const axios = require('axios');
+
+// User service URL for points updates
+const USER_SERVICE_URL = `${process.env.USER_SERVICE_URL || 'http://localhost:3001'}/api/users`;
+
+// Helper function to award points to user
+async function awardPoints(userId, points) {
+  try {
+    await axios.put(
+      `${USER_SERVICE_URL}/${userId}/points`,
+      { pointsToAdd: points },
+      { headers: { 'x-service-key': process.env.INTERNAL_SERVICE_KEY } }
+    );
+    console.log(`[POINTS] Awarded ${points} points to user ${userId} for creating post`);
+  } catch (error) {
+    console.error('Error awarding points:', error.message);
+    // Don't throw - points are nice to have but not critical
+  }
+}
 
 // Create a new post
 const createPost = async (req, res) => {
@@ -122,6 +141,9 @@ const createPost = async (req, res) => {
         }
       }
     }
+
+    // Award 10 points for creating a post
+    await awardPoints(userID, 10);
 
     // Invalidate feed caches
     await cache.delPattern(`feed:*`);

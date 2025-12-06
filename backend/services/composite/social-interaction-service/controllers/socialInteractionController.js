@@ -12,12 +12,22 @@ const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api/posts`;
 const INTERACTION_SERVICE_URL = `${INTERACTION_SERVICE_BASE}/api/interactions`;
 const FOLLOW_SERVICE_URL = `${FOLLOW_SERVICE_BASE}/api/follow`;
 
+// Internal service key header for service-to-service calls
+const getServiceHeaders = () => ({
+  'x-service-key': process.env.INTERNAL_SERVICE_KEY
+});
+
 // Helper function to award points to user
 async function updateUserPoints(userId, points) {
   try {
-    await axios.put(`${USER_SERVICE_URL}/${userId}/points`, { points });
+    await axios.put(
+      `${USER_SERVICE_URL}/${userId}/points`,
+      { pointsToAdd: points },
+      { headers: { 'x-service-key': process.env.INTERNAL_SERVICE_KEY } }
+    );
+    console.log(`[POINTS] Successfully updated points for user ${userId}: ${points > 0 ? '+' : ''}${points}`);
   } catch (error) {
-    console.error('Error updating user points:', error.message);
+    console.error('Error updating user points:', error.message, error.response?.data);
     // Don't throw - points are nice to have but not critical
   }
 }
@@ -37,7 +47,8 @@ exports.likePost = async (req, res) => {
     // Step 1: Record the like in interaction service
     const interactionResponse = await axios.post(
       `${INTERACTION_SERVICE_URL}/like/post/${postId}`,
-      { userId }
+      { userId },
+      { headers: getServiceHeaders() }
     );
 
     // Step 2: Get post details to find creator
@@ -86,7 +97,7 @@ exports.unlikePost = async (req, res) => {
     // Step 1: Remove the like from interaction service
     await axios.delete(
       `${INTERACTION_SERVICE_URL}/unlike/post/${postId}`,
-      { data: { userId } }
+      { data: { userId }, headers: getServiceHeaders() }
     );
 
     // Step 2: Get post details to find creator
@@ -131,7 +142,8 @@ exports.sharePost = async (req, res) => {
     // Step 1: Record the share in interaction service
     const interactionResponse = await axios.post(
       `${INTERACTION_SERVICE_URL}/share/post/${postId}`,
-      { userId }
+      { userId },
+      { headers: getServiceHeaders() }
     );
 
     // Step 2: Get post details to find creator
@@ -181,7 +193,8 @@ exports.addComment = async (req, res) => {
     // Step 1: Add comment via interaction service
     const interactionResponse = await axios.post(
       `${INTERACTION_SERVICE_URL}/comment/post/${postId}`,
-      { userId, content, username }
+      { userId, content, username },
+      { headers: getServiceHeaders() }
     );
 
     // Step 2: Get post details to find creator
@@ -225,14 +238,15 @@ exports.deleteComment = async (req, res) => {
   try {
     // Step 1: Get comment details before deletion
     const commentResponse = await axios.get(
-      `${INTERACTION_SERVICE_URL}/comment/${commentId}`
+      `${INTERACTION_SERVICE_URL}/comment/${commentId}`,
+      { headers: getServiceHeaders() }
     );
     const comment = commentResponse.data;
 
     // Step 2: Delete comment via interaction service
     await axios.delete(
       `${INTERACTION_SERVICE_URL}/comment/${commentId}`,
-      { data: { userId } }
+      { data: { userId }, headers: getServiceHeaders() }
     );
 
     // Step 3: Update post comment count
@@ -559,7 +573,7 @@ exports.getSuggestedUsers = async (req, res) => {
     const formattedUsers = suggestedUsers.map(user => ({
       userID: user.userID || user.id,
       username: user.username,
-      profilePicture: user.profilePicture || '/src/assets/images/default-profile.png',
+      profilePicture: user.profilePicture || '/resources/images/default-profile.png',
       isFollowing: false // By design, these are non-followed users
     }));
 

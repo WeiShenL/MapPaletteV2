@@ -58,7 +58,7 @@
               >
                 <div class="d-flex align-items-center">
                   <img 
-                    :src="player.profilePicture || '/resources/default-profile.png'" 
+                    :src="player.profilePicture || '/resources/images/default-profile.png'" 
                     :alt="player.username" 
                     class="profile-pic me-3"
                     @click="goToProfile(player.userId)"
@@ -121,7 +121,7 @@
               <div class="col-1 col-sm-2">{{ player.rank }}</div>
               <div class="col-1 col-sm-1">
                 <img 
-                  :src="player.profilePicture || '/resources/default-profile.png'" 
+                  :src="player.profilePicture || '/resources/images/default-profile.png'" 
                   :alt="player.username" 
                   class="profile-pic" 
                   @click="goToProfile(player.userId)"

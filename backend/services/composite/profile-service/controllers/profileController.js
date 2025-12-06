@@ -7,7 +7,7 @@ const INTERACTION_SERVICE_BASE = process.env.INTERACTION_SERVICE_URL || 'http://
 const FOLLOW_SERVICE_BASE = process.env.FOLLOW_SERVICE_URL || 'http://localhost:3007';
 
 // full service URLs with API paths
-const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api`;
+const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api/posts`;
 const USER_SERVICE_URL = `${USER_SERVICE_BASE}/api/users`;
 const INTERACTION_SERVICE_URL = `${INTERACTION_SERVICE_BASE}/api/interactions`;
 const FOLLOW_SERVICE_URL = `${FOLLOW_SERVICE_BASE}/api/follow`;

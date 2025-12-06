@@ -411,12 +411,19 @@ onUnmounted(() => {
 
 .modal-image {
   text-align: center;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .modal-image img {
   max-height: 500px;
-  width: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
 }
 
 .no-image-placeholder {
@@ -553,7 +560,18 @@ onUnmounted(() => {
 }
 
 /* Responsive adjustments */
-@media (max-width: 768px) {
+@media (max-width: 991px) {
+  .modal-dialog {
+    max-width: 95%;
+    margin: 1rem auto;
+  }
+
+  .modal-image img {
+    max-height: 400px;
+  }
+}
+
+@media (max-width: 767px) {
   .modal-dialog {
     max-width: 100%;
     margin: 0;
@@ -562,6 +580,10 @@ onUnmounted(() => {
   .modal-content {
     min-height: 100vh;
     border-radius: 0;
+  }
+
+  .modal-image img {
+    max-height: 300px;
   }
 
   .route-stats {

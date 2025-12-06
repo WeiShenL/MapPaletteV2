@@ -11,6 +11,17 @@ console.log('[AUTH] Supabase client configured with URL:', supabaseUrl);
 
 const verifyAuth = async (req, res, next) => {
   try {
+    // Check for internal service key first (for service-to-service calls)
+    const serviceKey = req.headers['x-service-key'];
+    if (serviceKey && serviceKey === process.env.INTERNAL_SERVICE_KEY) {
+      // For service calls, use userId from body as the authenticated user
+      req.user = {
+        id: req.body.userId || req.query.userId,
+        isServiceCall: true
+      };
+      return next();
+    }
+
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {

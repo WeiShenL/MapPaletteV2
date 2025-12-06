@@ -239,7 +239,7 @@ export default {
     const userProfile = ref({
       name: '',
       username: '',
-      avatar: '/resources/default-profile.png',
+      avatar: '/resources/images/default-profile.png',
       stats: {
         routes: 0,
         following: 0,
@@ -288,7 +288,7 @@ export default {
       userProfile.value = {
         name: userData.username,
         username: userData.username, 
-        avatar: userData.profilePicture || '/resources/default-profile.png',
+        avatar: userData.profilePicture || '/resources/images/default-profile.png',
         stats: {
           routes: userData.postsCreated?.length || 0,
           following: userData.numFollowing || userData.following?.length || 0,  

@@ -25,18 +25,18 @@
           </div>
         </div>
         <p>
-          by <router-link :to="`/profile/${activity.userID}`" class="text-decoration-none">{{ activity.user }}</router-link>
+          by <router-link :to="`/profile/${activity.userID || activity.userId || activity.user?.id}`" class="text-decoration-none">{{ activity.user?.username || activity.username || 'Unknown User' }}</router-link>
         </p>
       </div>
       <div class="meta">
         <time class="published">{{ activity.date }}</time>
         <div class="d-flex align-items-center justify-content-end mt-2">
-          <span class="me-2">{{ activity.user }}</span>
-          <router-link :to="`/profile/${activity.userID}`">
-            <img 
-              :src="activity.userImg" 
-              alt="Profile" 
-              class="rounded-circle" 
+          <span class="me-2">{{ activity.user?.username || activity.username || 'Unknown User' }}</span>
+          <router-link :to="`/profile/${activity.userID || activity.userId || activity.user?.id}`">
+            <img
+              :src="activity.user?.profilePicture || activity.userImg || '/resources/images/default-profile.png'"
+              alt="Profile"
+              class="rounded-circle"
               style="width: 40px; height: 40px; object-fit: cover;"
             >
           </router-link>
