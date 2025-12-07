@@ -87,7 +87,7 @@ exports.getUserProfile = async (req, res) => {
         }
         
         // Check if current user has liked
-        const hasLiked = currentUserId && interactions.likes.likes ? 
+        const hasLiked = currentUserId && interactions.likes.likes ?
           interactions.likes.likes.some(like => like.userId === currentUserId) : false;
         
         // Get usernames for comments
@@ -115,7 +115,7 @@ exports.getUserProfile = async (req, res) => {
           userId: post.userID || post.userId,
           username: user.username,
           profilePicture: user.profilePicture,
-          image: post.image,
+          image: post.imageUrl || post.image,
           distance: post.distance,
           region: post.region,
           waypoints: post.waypoints,
@@ -168,7 +168,7 @@ exports.getUserProfile = async (req, res) => {
           id: post.id || post.postID,
           title: post.title,
           distance: `${post.distance || 0} km`,
-          image: post.image
+          image: post.imageUrl || post.image
         }))
     });
 

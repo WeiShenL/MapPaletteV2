@@ -4,21 +4,50 @@
       <div class="modal-content">
         <!-- Modal Header -->
         <div class="modal-header d-flex justify-content-between align-items-start">
-          <div class="header-content">
+          <div class="header-content flex-grow-1">
             <h5 class="modal-title">{{ post.title }}</h5>
-            <h6 class="modal-author text-muted">
-              by
-              <router-link
-                :to="`/profile/${post.userId}`"
-                class="text-decoration-none"
-              >
-                {{ post.user?.username || 'Unknown User' }}
+            <div class="d-flex align-items-center gap-2 mt-2">
+              <!-- User profile picture -->
+              <router-link :to="`/profile/${post.userId}`">
+                <img
+                  :src="post.user?.profilePicture || '/resources/images/default-profile.png'"
+                  alt="Profile"
+                  class="rounded-circle"
+                  style="width: 32px; height: 32px; object-fit: cover;"
+                >
               </router-link>
-            </h6>
+              <h6 class="modal-author text-muted mb-0">
+                by
+                <router-link
+                  :to="`/profile/${post.userId}`"
+                  class="text-decoration-none"
+                >
+                  {{ post.user?.username || 'Unknown User' }}
+                </router-link>
+              </h6>
+              <!-- Edit dropdown for post owner -->
+              <div v-if="isOwnPost" class="dropdown ms-auto">
+                <button
+                  class="btn btn-link text-dark p-0"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                >
+                  <i class="fas fa-ellipsis-h"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li>
+                    <button class="dropdown-item" @click="handleEdit">
+                      <i class="fas fa-edit me-2"></i>Edit Post
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
           <button
             type="button"
-            class="btn-close"
+            class="btn-close ms-2"
             aria-label="Close"
             @click="close"
           ></button>
@@ -278,6 +307,21 @@ const {
   deleteComment,
   loadMoreComments
 } = useComments(post.value.id)
+
+/**
+ * Check if current user owns this post
+ */
+const isOwnPost = computed(() => {
+  const postUserId = post.value?.userId || post.value?.userID || post.value?.user?.id
+  return props.currentUser && postUserId === props.currentUser?.id
+})
+
+/**
+ * Handle edit button click
+ */
+const handleEdit = () => {
+  window.location.href = `/create-route?id=${post.value.id}`
+}
 
 /**
  * Check if current user can delete a comment

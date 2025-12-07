@@ -3,9 +3,14 @@
     <!-- Header -->
     <header>
       <div class="title">
-        <div class="d-flex justify-content-between align-items-start">
-          <h2>{{ activity.title }}</h2>
-          <div v-if="isOwnPost" class="dropdown">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h2>{{ activity.title }}</h2>
+            <p class="mb-0">
+              by <router-link :to="`/profile/${activity.userID || activity.userId || activity.user?.id}`" class="text-decoration-none">{{ activity.user?.username || activity.username || 'Unknown User' }}</router-link>
+            </p>
+          </div>
+          <div v-if="isOwnPost" class="dropdown ms-3">
             <button 
               class="btn btn-link text-dark p-0" 
               type="button" 
@@ -24,9 +29,6 @@
             </ul>
           </div>
         </div>
-        <p>
-          by <router-link :to="`/profile/${activity.userID || activity.userId || activity.user?.id}`" class="text-decoration-none">{{ activity.user?.username || activity.username || 'Unknown User' }}</router-link>
-        </p>
       </div>
       <div class="meta">
         <time class="published">{{ activity.date }}</time>
@@ -149,7 +151,8 @@ const normalizedActivity = computed(() => {
 
 // Computed properties
 const isOwnPost = computed(() => {
-  return props.currentUser && props.activity.userID === props.currentUser.id
+  const activityUserId = props.activity.userID || props.activity.userId || props.activity.user?.id
+  return props.currentUser && activityUserId === props.currentUser.id
 })
 
 const commentCount = computed(() => {

@@ -294,6 +294,100 @@ const checkLike = async (req, res) => {
   }
 };
 
+// Get likes for a post
+const getLikes = async (req, res) => {
+  const { entityId } = req.params;
+  const { page = 1, limit = 50 } = req.query;
+
+  console.log(`[GET_LIKES] Fetching likes for post ${entityId}`);
+
+  try {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [likes, total] = await Promise.all([
+      db.like.findMany({
+        where: { postId: entityId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              profilePicture: true,
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: parseInt(limit),
+        skip,
+      }),
+      db.like.count({ where: { postId: entityId } })
+    ]);
+
+    return res.json({
+      count: total,
+      likes: likes.map(like => ({
+        id: like.id,
+        userId: like.userId,
+        username: like.user?.username,
+        profilePicture: like.user?.profilePicture,
+        createdAt: like.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error(`[GET_LIKES] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching likes', error: error.message });
+  }
+};
+
+// Get shares for a post
+const getShares = async (req, res) => {
+  const { entityId } = req.params;
+  const { page = 1, limit = 50 } = req.query;
+
+  console.log(`[GET_SHARES] Fetching shares for post ${entityId}`);
+
+  try {
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [shares, total] = await Promise.all([
+      db.share.findMany({
+        where: { postId: entityId },
+        include: {
+          user: {
+            select: {
+              id: true,
+              username: true,
+              profilePicture: true,
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        take: parseInt(limit),
+        skip,
+      }),
+      db.share.count({ where: { postId: entityId } })
+    ]);
+
+    return res.json({
+      count: total,
+      shares: shares.map(share => ({
+        id: share.id,
+        userId: share.userId,
+        username: share.user?.username,
+        profilePicture: share.user?.profilePicture,
+        createdAt: share.createdAt
+      }))
+    });
+  } catch (error) {
+    console.error(`[GET_SHARES] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching shares', error: error.message });
+  }
+};
+
 // Get all interactions for a post (batch)
 const getInteractionsBatch = async (req, res) => {
   const { postIds, userId } = req.body;
@@ -335,5 +429,7 @@ module.exports = {
   getComments,
   deleteComment,
   checkLike,
+  getLikes,
+  getShares,
   getInteractionsBatch,
 };

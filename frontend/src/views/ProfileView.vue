@@ -220,6 +220,7 @@ import profileService from '@/services/profileService.js'
 import socialInteractionService from '@/services/socialInteractionService.js'
 import { calculateTimeSince } from '@/utils/dateFormatter'
 import { useAlert } from '@/composables/useAlert'
+import { normalizePosts } from '@/utils/postNormalizer'
 
 export default {
   name: 'ProfileView',
@@ -308,27 +309,19 @@ export default {
         // Set follow status
         isFollowing.value = profileData.followStatus.isFollowing
 
-        // Set activities and routes (already processed with interactions)
-        activities.value = profileData.posts.map(post => ({
-          id: post.id,
-          user: post.username,
-          userImg: post.profilePicture,
-          userID: post.userId,
-          createdAt: post.createdAt,
-          date: calculateTimeSince(post.createdAt),
-          location: post.waypoints?.[0]?.address || 'Unknown Location',
-          title: post.title,
-          distance: `${post.distance || 0} km`,
-          description: post.description,
-          mapImg: post.image,
-          likes: post.likeCount,
-          commentsList: post.commentsList,
-          shares: post.shareCount,
-          isLiked: post.isLiked
-        }))
+        // Use normalizePosts for consistent data format with HomepageView
+        activities.value = normalizePosts(profileData.posts.map(post => ({
+          ...post,
+          imageUrl: post.image, // Map image to imageUrl for normalizer
+          user: {
+            id: post.userId,
+            username: post.username,
+            profilePicture: post.profilePicture
+          }
+        })))
 
         routes.value = profileData.routes
-        
+
       } catch (error) {
         console.error('Error loading user profile:', error)
         setAlert('error', 'Failed to load user profile')
@@ -352,27 +345,19 @@ export default {
           stats: profileData.stats
         }
 
-        // Set activities and routes (already processed with interactions)
-        activities.value = profileData.posts.map(post => ({
-          id: post.id,
-          user: post.username,
-          userImg: post.profilePicture,
-          userID: post.userId,
-          createdAt: post.createdAt,
-          date: calculateTimeSince(post.createdAt),
-          location: post.waypoints?.[0]?.address || 'Unknown Location',
-          title: post.title,
-          distance: `${post.distance || 0} km`,
-          description: post.description,
-          mapImg: post.image,
-          likes: post.likeCount,
-          commentsList: post.commentsList,
-          shares: post.shareCount,
-          isLiked: post.isLiked
-        }))
+        // Use normalizePosts for consistent data format with HomepageView
+        activities.value = normalizePosts(profileData.posts.map(post => ({
+          ...post,
+          imageUrl: post.image, // Map image to imageUrl for normalizer
+          user: {
+            id: post.userId,
+            username: post.username,
+            profilePicture: post.profilePicture
+          }
+        })))
 
         routes.value = profileData.routes
-        
+
       } catch (error) {
         console.error('Error loading current user profile:', error)
         
