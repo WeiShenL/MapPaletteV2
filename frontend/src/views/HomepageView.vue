@@ -154,10 +154,10 @@
                               emptyMessage="No activities to show yet. Follow some runners to see their posts!"
                               endMessage="You've seen all activities."
                           >
-                              <template #default="{ items }">
+                              <template #default>
                                   <activity-card
-                                      v-for="activity in items"
-                                      :key="activity.id"
+                                      v-for="activity in activities"
+                                      :key="activity.id + '-' + (activity.isLiked ? 'liked' : 'notliked')"
                                       :activity="activity"
                                       :current-user="currentUser"
                                       @like="likeActivity"
@@ -211,7 +211,6 @@ import socialInteractionService from '@/services/socialInteractionService.js'
 import feedService from '@/services/feedService.js'
 import { normalizePosts } from '@/utils/postNormalizer'
 import { useAlert } from '@/composables/useAlert'
-import { useOptimisticUpdate } from '@/composables/useOptimisticUpdate'
 
 export default {
   name: 'HomepageView',
@@ -228,7 +227,6 @@ export default {
   setup() {
     // Composables
     const { showAlert, alertType, alertMessage, setAlert } = useAlert()
-    const { toggleOptimistic } = useOptimisticUpdate()
 
     // State
     const currentUser = ref(null)
@@ -278,9 +276,27 @@ export default {
         }
     })
 
+    // Store optimistic updates in a reactive object for proper reactivity
+    const likeStates = ref({})
+
     const activities = computed(() => {
         if (!feedData.value?.pages) return []
-        return feedData.value.pages.flatMap(page => normalizePosts(page.posts))
+        const normalized = feedData.value.pages.flatMap(page => normalizePosts(page.posts))
+
+        // Merge with cached optimistic like states
+        return normalized.map(activity => {
+            const cached = likeStates.value[activity.id]
+            if (cached !== undefined) {
+                // Apply cached optimistic state
+                return {
+                    ...activity,
+                    isLiked: cached.isLiked,
+                    likeCount: cached.likeCount,
+                    likes: cached.likeCount
+                }
+            }
+            return activity
+        })
     })
     
     // Methods
@@ -322,21 +338,58 @@ export default {
         return
       }
 
-      await toggleOptimistic({
-        item: activity,
-        key: 'isLiked',
-        countKey: 'likes',
-        apiCall: (isLiked) => {
-          if (isLiked) {
-            return socialInteractionService.likePost(activity.id, userId)
-          } else {
-            return socialInteractionService.unlikePost(activity.id, userId)
-          }
-        },
-        onError: () => {
-          setAlert('error', 'Failed to update like. Please try again.')
+      const activityId = activity.id
+      const wasLiked = activity.isLiked
+      const newLikedState = !wasLiked
+      const currentLikeCount = activity.likeCount || activity.likes || 0
+      const newLikeCount = Math.max(0, currentLikeCount + (newLikedState ? 1 : -1))
+
+      // Optimistic update - reassign the entire object to trigger reactivity
+      likeStates.value = {
+        ...likeStates.value,
+        [activityId]: {
+          isLiked: newLikedState,
+          likeCount: newLikeCount
         }
-      })
+      }
+
+      // Also update selectedActivity if it's the same post (for modal)
+      if (selectedActivity.value && selectedActivity.value.id === activityId) {
+        selectedActivity.value = {
+          ...selectedActivity.value,
+          isLiked: newLikedState,
+          likeCount: newLikeCount,
+          likes: newLikeCount
+        }
+      }
+
+      try {
+        if (newLikedState) {
+          await socialInteractionService.likePost(activityId, userId)
+        } else {
+          await socialInteractionService.unlikePost(activityId, userId)
+        }
+      } catch (error) {
+        // Revert optimistic update on error
+        likeStates.value = {
+          ...likeStates.value,
+          [activityId]: {
+            isLiked: wasLiked,
+            likeCount: currentLikeCount
+          }
+        }
+
+        if (selectedActivity.value && selectedActivity.value.id === activityId) {
+          selectedActivity.value = {
+            ...selectedActivity.value,
+            isLiked: wasLiked,
+            likeCount: currentLikeCount,
+            likes: currentLikeCount
+          }
+        }
+
+        setAlert('error', 'Failed to update like. Please try again.')
+      }
     }
     
     const scrollToTop = () => {

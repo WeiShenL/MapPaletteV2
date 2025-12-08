@@ -48,7 +48,7 @@ router.delete(
   asyncHandler(postController.deletePost)
 );
 
-// Internal service route (requires service key) - Strict rate limit
-router.patch('/posts/:id/count', strictLimiter, validate({ params: idParamSchema }), asyncHandler(postController.updateInteractionCount));
+// Internal service route (requires service key) - No rate limit as it's internal
+router.patch('/:id/count', validate({ params: idParamSchema }), asyncHandler(postController.updateInteractionCount));
 
 module.exports = router;

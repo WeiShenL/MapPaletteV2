@@ -25,9 +25,13 @@ router.delete('/unlike/:entityType/:entityId', moderateLimiter, verifyAuth, vali
 router.post('/share/:entityType/:entityId', moderateLimiter, verifyAuth, validate({ params: entitySchema }), asyncHandler(interactionController.shareEntity));
 
 // Comment endpoints
-router.post('/comment/:entityType/:entityId', moderateLimiter, verifyAuth, validate({ params: entitySchema, body: commentSchema }), asyncHandler(interactionController.addComment));
-router.get('/comment/:commentId', lenientLimiter, validate({ params: commentIdSchema }), asyncHandler(interactionController.getComment));
-router.delete('/comment/:commentId', strictLimiter, verifyAuth, validate({ params: commentIdSchema }), asyncHandler(interactionController.deleteComment));
+router.post('/comment/:entityType/:entityId', moderateLimiter, validate({ params: entitySchema }), asyncHandler(interactionController.createComment));
+router.delete('/comment/:entityType/:entityId/:commentId', strictLimiter, validate({ params: commentIdSchema }), asyncHandler(interactionController.deleteComment));
+
+// Single comment endpoints (by commentId only)
+// Using lenient/moderate limiters since these are called by composite services
+router.get('/comment/:commentId', lenientLimiter, validate({ params: commentIdSchema }), asyncHandler(interactionController.getCommentById));
+router.delete('/comment/:commentId', moderateLimiter, validate({ params: commentIdSchema }), asyncHandler(interactionController.deleteCommentById));
 
 // Get interactions for an entity (lenient rate limit)
 router.get('/likes/:entityType/:entityId', lenientLimiter, validate({ params: entitySchema, query: paginationSchema }), asyncHandler(interactionController.getLikes));
@@ -35,7 +39,7 @@ router.get('/comments/:entityType/:entityId', lenientLimiter, validate({ params:
 router.get('/shares/:entityType/:entityId', lenientLimiter, validate({ params: entitySchema, query: paginationSchema }), asyncHandler(interactionController.getShares));
 
 // Check user interaction status (lenient rate limit)
-router.get('/check/:entityType/:entityId/:userId', lenientLimiter, validate({ params: { ...entitySchema.shape, userId: uuidSchema } }), asyncHandler(interactionController.checkUserInteraction));
+router.get('/check/:entityType/:entityId/:userId', lenientLimiter, asyncHandler(interactionController.checkLike));
 
 // Batch endpoints (moderate rate limit)
 router.post('/batch', moderateLimiter, asyncHandler(interactionController.getBatchInteractions));

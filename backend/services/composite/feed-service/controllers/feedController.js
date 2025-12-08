@@ -397,9 +397,188 @@ const searchPosts = async (req, res) => {
   }
 };
 
+// Get all posts (discovery/explore feed)
+const getAllPosts = async (req, res) => {
+  const { cursor, limit = 20 } = req.query;
+  const userId = req.user?.id || req.query?.userId;
+
+  console.log(`[GET_ALL_POSTS] Fetching all posts`);
+
+  try {
+    const cacheKey = `all:${cursor || 'start'}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    const take = parseInt(limit);
+
+    // Get all public posts
+    const posts = await db.post.findMany({
+      where: {
+        user: {
+          isProfilePrivate: false,
+          isPostPrivate: false,
+        }
+      },
+      take: take + 1,
+      ...(cursor && {
+        cursor: { id: cursor },
+        skip: 1
+      }),
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true,
+          }
+        }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      }
+    });
+
+    const hasMore = posts.length > take;
+    const postsToReturn = hasMore ? posts.slice(0, -1) : posts;
+    const nextCursor = hasMore ? postsToReturn[postsToReturn.length - 1].id : null;
+
+    // Check if current user liked these posts (batch query)
+    let likedPostIds = new Set();
+    if (userId && postsToReturn.length > 0) {
+      const likes = await db.like.findMany({
+        where: {
+          userId,
+          postId: { in: postsToReturn.map(p => p.id) }
+        },
+        select: { postId: true }
+      });
+      likedPostIds = new Set(likes.map(l => l.postId));
+    }
+
+    const enrichedPosts = postsToReturn.map(post => ({
+      id: post.id,
+      userId: post.userId,
+      title: post.title,
+      description: post.description,
+      waypoints: post.waypoints,
+      color: post.color,
+      region: post.region,
+      distance: post.distance,
+      imageUrl: post.imageUrl,
+      createdAt: post.createdAt,
+      user: post.user,
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+      shareCount: post._count.shares,
+      isLiked: likedPostIds.has(post.id),
+    }));
+
+    const result = {
+      posts: enrichedPosts,
+      pagination: {
+        hasMore,
+        nextCursor,
+      }
+    };
+
+    // Cache for 5 minutes
+    await cache.set(cacheKey, result, 300);
+
+    return res.json(result);
+  } catch (error) {
+    console.error(`[GET_ALL_POSTS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching posts', error: error.message });
+  }
+};
+
+// Get single post details
+const getPostDetails = async (req, res) => {
+  const postId = req.params.postId || req.params.id;
+  const userId = req.user?.id || req.query?.userId;
+
+  console.log(`[GET_POST_DETAILS] Fetching post ${postId}`);
+
+  if (!postId) {
+    return res.status(400).json({ message: 'Post ID is required' });
+  }
+
+  try {
+    // Get post with all details
+    const post = await db.post.findUnique({
+      where: { id: postId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        },
+        _count: {
+          select: {
+            likes: true,
+            comments: true,
+            shares: true,
+          }
+        }
+      }
+    });
+
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    // Check if current user liked this post
+    let isLiked = false;
+    if (userId) {
+      const like = await db.like.findFirst({
+        where: {
+          userId,
+          postId
+        }
+      });
+      isLiked = !!like;
+    }
+
+    const enrichedPost = {
+      id: post.id,
+      userId: post.userId,
+      title: post.title,
+      description: post.description,
+      waypoints: post.waypoints,
+      color: post.color,
+      region: post.region,
+      distance: post.distance,
+      imageUrl: post.imageUrl,
+      createdAt: post.createdAt,
+      user: post.user,
+      likeCount: post._count.likes,
+      commentCount: post._count.comments,
+      shareCount: post._count.shares,
+      isLiked,
+    };
+
+    return res.json({ post: enrichedPost });
+  } catch (error) {
+    console.error(`[GET_POST_DETAILS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching post details', error: error.message });
+  }
+};
+
 module.exports = {
   getUserFeed,
   getTrendingPosts,
   getRecentPosts,
   searchPosts,
+  getAllPosts,
+  getPostDetails,
 };

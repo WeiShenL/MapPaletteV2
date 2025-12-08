@@ -33,6 +33,12 @@ const routes = [
     component: () => import('@/views/HomepageView.vue'),
     meta: { requiresAuth: true }
   },
+  {
+    path: '/post/:id',
+    name: 'post',
+    component: () => import('@/views/PostView.vue'),
+    meta: { requiresAuth: true }
+  },
   // previously is addmaps.html but i change name alrdy
   {
     path: '/create-route',

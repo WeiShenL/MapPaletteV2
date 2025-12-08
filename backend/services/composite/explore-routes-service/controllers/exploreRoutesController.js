@@ -222,7 +222,7 @@ const getRouteById = async (req, res) => {
     console.log(`[GET_ROUTE] Fetching route ${postId} for user ${userId || 'anonymous'}`);
     
     // Fetch post from post service
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
     let post = postResponse.data;
     
     // Enrich with user data

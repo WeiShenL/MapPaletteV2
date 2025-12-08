@@ -163,7 +163,7 @@ const createPost = async (req, res) => {
 
 // Get single post by ID (with caching)
 const getPost = async (req, res) => {
-  const { id: postID } = req.query;
+  const postID = req.query.id || req.query.postId;
 
   if (!postID) {
     return res.status(400).json({ message: 'Post ID is required' });
@@ -225,7 +225,7 @@ const getPost = async (req, res) => {
 
 // Update post
 const updatePost = async (req, res) => {
-  const { id: postID } = req.query;
+  const postID = req.query.id || req.query.postId;
   const { title, description, imageUrl } = req.body;
 
   if (!postID) {
@@ -259,7 +259,7 @@ const updatePost = async (req, res) => {
 
 // Delete post
 const deletePost = async (req, res) => {
-  const { id: postID } = req.query;
+  const postID = req.query.id || req.query.postId;
 
   if (!postID) {
     return res.status(400).json({ message: 'Post ID is required' });
@@ -432,7 +432,7 @@ const getUserPosts = async (req, res) => {
 // Update interaction count (INTERNAL USE - requires service key)
 const updateInteractionCount = async (req, res) => {
   const { id: postID } = req.params;
-  const { likeCount, commentCount, shareCount } = req.body;
+  const { likeCount, commentCount, shareCount, field, increment } = req.body;
 
   // Verify service key
   const serviceKey = req.headers['x-service-key'];
@@ -441,13 +441,26 @@ const updateInteractionCount = async (req, res) => {
   }
 
   try {
+    let updateData = {};
+
+    // Support both absolute values and increment format
+    if (field && increment !== undefined) {
+      // Increment format: { field: 'likeCount', increment: 1 }
+      const validFields = ['likeCount', 'commentCount', 'shareCount'];
+      if (!validFields.includes(field)) {
+        return res.status(400).json({ message: 'Invalid field' });
+      }
+      updateData[field] = { increment: increment };
+    } else {
+      // Absolute value format: { likeCount: 5 }
+      if (likeCount !== undefined) updateData.likeCount = likeCount;
+      if (commentCount !== undefined) updateData.commentCount = commentCount;
+      if (shareCount !== undefined) updateData.shareCount = shareCount;
+    }
+
     const post = await db.post.update({
       where: { id: postID },
-      data: {
-        ...(likeCount !== undefined && { likeCount }),
-        ...(commentCount !== undefined && { commentCount }),
-        ...(shareCount !== undefined && { shareCount }),
-      }
+      data: updateData
     });
 
     // Invalidate cache

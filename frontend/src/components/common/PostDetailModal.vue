@@ -1,4 +1,17 @@
 <template>
+  <!-- Delete Comment Confirmation Modal -->
+  <ConfirmModal
+    v-if="showDeleteConfirm"
+    title="Delete Comment"
+    message="Are you sure you want to delete this comment? This action cannot be undone."
+    confirm-text="Delete"
+    cancel-text="Cancel"
+    variant="danger"
+    @confirm="confirmDeleteComment"
+    @cancel="cancelDeleteComment"
+    @close="cancelDeleteComment"
+  />
+
   <div class="modal fade" tabindex="-1" ref="modalRef" @hidden.bs.modal="handleClose">
     <div class="modal-dialog modal-xl">
       <div class="modal-content">
@@ -185,7 +198,7 @@
             </div>
 
             <!-- Comments List -->
-            <div v-else-if="displayedComments.length > 0" class="comments-list">
+            <div v-else-if="displayedComments.length > 0" class="comments-list" :key="'comments-v' + commentsVersion">
               <div
                 v-for="comment in displayedComments"
                 :key="comment.id"
@@ -218,7 +231,7 @@
                       <button
                         v-if="canDeleteComment(comment)"
                         class="btn btn-link btn-sm text-danger p-0"
-                        @click="handleDeleteComment(comment.id)"
+                        @click="requestDeleteComment(comment.id)"
                         title="Delete comment"
                       >
                         <i class="fas fa-trash-alt"></i>
@@ -251,12 +264,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { Modal } from 'bootstrap'
 import { formatRelativeTime } from '@/utils/dateFormatter'
 import { normalizePost } from '@/utils/postNormalizer'
 import { useComments } from '@/composables/useComments'
 import PostActions from './PostActions.vue'
+import ConfirmModal from './ConfirmModal.vue'
 
 const props = defineProps({
   /**
@@ -289,9 +303,31 @@ const emit = defineEmits([
 const modalRef = ref(null)
 const modal = ref(null)
 
-// Normalize post data
-const normalizedPost = computed(() => normalizePost(props.post))
-const post = computed(() => normalizedPost.value)
+// Confirmation modal state
+const showDeleteConfirm = ref(false)
+const commentToDelete = ref(null)
+const commentsVersion = ref(0)
+
+// Create a reactive post object that syncs with props
+const reactivePost = ref(null)
+
+// Initialize and sync reactive post with props
+watch(() => props.post, (newPost) => {
+  if (newPost) {
+    const normalized = normalizePost(newPost)
+    if (!reactivePost.value) {
+      reactivePost.value = normalized
+    } else {
+      // Update reactive post properties to keep UI in sync
+      Object.assign(reactivePost.value, normalized)
+    }
+  }
+}, { immediate: true, deep: true })
+
+const post = computed(() => reactivePost.value || normalizePost(props.post))
+
+// Get post ID for comments - use props directly to ensure it's available immediately
+const postIdForComments = computed(() => props.post?.id || props.post?.postID || props.post?.postId)
 
 // Comments composable
 const {
@@ -306,7 +342,7 @@ const {
   submitComment,
   deleteComment,
   loadMoreComments
-} = useComments(post.value.id)
+} = useComments(postIdForComments.value)
 
 /**
  * Check if current user owns this post
@@ -340,9 +376,17 @@ const canDeleteComment = (comment) => {
 
 /**
  * Handle like button click
+ * Updates local state immediately for responsive UI, then emits to parent
  */
-const handleLike = (post) => {
-  emit('like', post)
+const handleLike = (postData) => {
+  // Optimistically update local reactive post for immediate UI feedback
+  if (reactivePost.value) {
+    const wasLiked = reactivePost.value.isLiked
+    reactivePost.value.isLiked = !wasLiked
+    reactivePost.value.likeCount = Math.max(0, (reactivePost.value.likeCount || 0) + (wasLiked ? -1 : 1))
+  }
+  // Emit to parent to handle API call and update source data
+  emit('like', props.post)
 }
 
 /**
@@ -388,20 +432,48 @@ const handleSubmitComment = async () => {
 }
 
 /**
- * Delete a comment
+ * Request to delete a comment (shows confirmation modal)
  */
-const handleDeleteComment = async (commentId) => {
+const requestDeleteComment = (commentId) => {
+  console.log('[PostDetailModal] requestDeleteComment called for comment:', commentId)
   if (!props.currentUser) return
+  commentToDelete.value = commentId
+  showDeleteConfirm.value = true
+}
 
-  if (confirm('Are you sure you want to delete this comment?')) {
-    const success = await deleteComment(commentId, props.currentUser.id)
-
-    if (success) {
-      emit('alert', 'success', 'Comment deleted successfully')
-    } else if (error.value) {
-      emit('alert', 'error', error.value)
-    }
+/**
+ * Confirm and delete a comment
+ */
+const confirmDeleteComment = async () => {
+  console.log('[PostDetailModal] confirmDeleteComment called')
+  console.log('[PostDetailModal] commentToDelete:', commentToDelete.value)
+  
+  if (!commentToDelete.value || !props.currentUser) {
+    console.error('[PostDetailModal] Cannot delete: missing commentId or user')
+    return
   }
+
+  const success = await deleteComment(commentToDelete.value, props.currentUser.id)
+  console.log('[PostDetailModal] deleteComment result:', success)
+
+  if (success) {
+    commentsVersion.value++
+    emit('alert', 'success', 'Comment deleted successfully')
+  } else if (error.value) {
+    emit('alert', 'error', error.value)
+  }
+
+  // Reset state
+  commentToDelete.value = null
+  showDeleteConfirm.value = false
+}
+
+/**
+ * Cancel delete comment
+ */
+const cancelDeleteComment = () => {
+  commentToDelete.value = null
+  showDeleteConfirm.value = false
 }
 
 /**

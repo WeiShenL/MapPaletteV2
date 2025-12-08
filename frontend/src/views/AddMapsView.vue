@@ -950,7 +950,7 @@ export default {
       if (!postId.value) return
       
       try {
-        const response = await axios.get(`${POST_SERVICE_URL.value}/posts?id=${postId.value}`)
+        const response = await axios.get(`${POST_SERVICE_URL.value}/posts?postId=${postId.value}`)
         
         if (!response.data || Object.keys(response.data).length === 0) {
           throw new Error("Post not found or already deleted.")
@@ -1010,7 +1010,7 @@ export default {
       }
       
       try {
-        const response = await axios.delete(`${POST_SERVICE_URL.value}/posts?id=${postId.value}`)
+        const response = await axios.delete(`${POST_SERVICE_URL.value}/posts?postId=${postId.value}`)
         
         if (response.status === 200) {
           deleteModalTitle.value = "Post deleted!"
@@ -1080,7 +1080,7 @@ export default {
         // Capture map as image and upload to Supabase Storage
         await captureMapAsImage(postId.value)
         
-        const response = await axios.put(`${POST_SERVICE_URL.value}/posts?id=${postId.value}`, {
+        const response = await axios.put(`${POST_SERVICE_URL.value}/posts?postId=${postId.value}`, {
           title: postTitle.value,
           description: postDescription.value,
           waypoints: waypoints.value,

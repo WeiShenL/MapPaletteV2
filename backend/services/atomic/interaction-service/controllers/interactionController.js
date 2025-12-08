@@ -243,7 +243,7 @@ const getComments = async (req, res) => {
   }
 };
 
-// Delete comment
+// Delete comment (with entityId in route)
 const deleteComment = async (req, res) => {
   const { entityId, commentId } = req.params;
 
@@ -272,16 +272,99 @@ const deleteComment = async (req, res) => {
   }
 };
 
+// Get a single comment by ID
+const getCommentById = async (req, res) => {
+  const { commentId } = req.params;
+
+  console.log(`[GET_COMMENT] Fetching comment ${commentId}`);
+
+  try {
+    const comment = await db.comment.findUnique({
+      where: { id: commentId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            profilePicture: true,
+          }
+        }
+      }
+    });
+
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    // Return with entityType and entityId for backwards compatibility
+    return res.json({
+      ...comment,
+      entityType: 'post',
+      entityId: comment.postId
+    });
+  } catch (error) {
+    console.error(`[GET_COMMENT] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching comment', error: error.message });
+  }
+};
+
+// Delete comment by ID only (looks up postId from the comment)
+const deleteCommentById = async (req, res) => {
+  const { commentId } = req.params;
+
+  console.log(`[DELETE_COMMENT_BY_ID] Deleting comment ${commentId}`);
+
+  try {
+    // First get the comment to find its postId
+    const comment = await db.comment.findUnique({
+      where: { id: commentId },
+      select: { postId: true }
+    });
+
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    const postId = comment.postId;
+
+    // Delete the comment
+    await db.comment.delete({
+      where: { id: commentId }
+    });
+
+    // Update post comment count
+    await db.post.update({
+      where: { id: postId },
+      data: { commentCount: { decrement: 1 } }
+    });
+
+    // Invalidate caches
+    await cache.del(`post:${postId}`);
+    await cache.delPattern(`comments:${postId}:*`);
+
+    console.log(`[DELETE_COMMENT_BY_ID] Successfully deleted comment ${commentId}`);
+    return res.json({ message: 'Comment deleted successfully!' });
+  } catch (error) {
+    console.error(`[DELETE_COMMENT_BY_ID] Error:`, error);
+    return res.status(500).json({ message: 'Error deleting comment', error: error.message });
+  }
+};
+
 // Check if user liked a post
 const checkLike = async (req, res) => {
-  const { entityId } = req.params;
-  const { userId } = req.query;
+  const { entityId, userId } = req.params;
+  // Also support userId from query for backwards compatibility
+  const userIdToCheck = userId || req.query.userId;
+
+  if (!userIdToCheck) {
+    return res.status(400).json({ message: 'User ID is required' });
+  }
 
   try {
     const like = await db.like.findUnique({
       where: {
         userId_postId: {
-          userId,
+          userId: userIdToCheck,
           postId: entityId,
         }
       }
@@ -428,6 +511,8 @@ module.exports = {
   createComment,
   getComments,
   deleteComment,
+  getCommentById,
+  deleteCommentById,
   checkLike,
   getLikes,
   getShares,

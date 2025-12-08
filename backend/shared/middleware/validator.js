@@ -96,9 +96,12 @@ const emailSchema = z.object({
   email: z.string().email('Invalid email address'),
 });
 
-// Post schemas
+// Post schemas - supports both 'id' and 'postId' query params
 const postIdSchema = z.object({
-  postId: uuidSchema,
+  id: uuidSchema.optional(),
+  postId: uuidSchema.optional(),
+}).refine(data => data.id || data.postId, {
+  message: 'Either id or postId must be provided'
 });
 
 const createPostSchema = z.object({

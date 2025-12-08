@@ -47,10 +47,12 @@ export const useComments = (postId) => {
    * Computed property for displayed comments with pagination
    */
   const displayedComments = computed(() => {
-    return comments.value.slice(0, visibleComments.value).map(comment => ({
+    const result = comments.value.slice(0, visibleComments.value).map(comment => ({
       ...comment,
       timeAgo: formatRelativeTime(comment.createdAt)
     }))
+    console.log('[useComments] displayedComments computed, count:', result.length)
+    return result
   })
 
   /**
@@ -86,8 +88,26 @@ export const useComments = (postId) => {
       const response = await socialInteractionService.getPostInteractions(postId, userId)
 
       // Extract and normalize comments
-      const rawComments = response.comments || []
+      let rawComments = response.comments || []
+      
+      // Handle case where response.comments is an object with a comments array (pagination wrapper)
+      if (rawComments && !Array.isArray(rawComments) && Array.isArray(rawComments.comments)) {
+        console.log('[useComments] Detected paginated comments response, extracting array')
+        rawComments = rawComments.comments
+      }
+
+      // Debug: Log raw comment structure before normalization
+      if (rawComments.length > 0) {
+        console.log('[useComments] Raw comment sample (first):', JSON.stringify(rawComments[0], null, 2))
+        console.log('[useComments] Raw comment keys:', Object.keys(rawComments[0]))
+      }
+
       comments.value = normalizeComments(rawComments)
+
+      // Debug: Log normalized comment structure
+      if (comments.value.length > 0) {
+        console.log('[useComments] Normalized comment sample (first):', JSON.stringify(comments.value[0], null, 2))
+      }
 
       // Sort by newest first
       comments.value.sort((a, b) => {
@@ -187,6 +207,7 @@ export const useComments = (postId) => {
    * @returns {Promise<boolean>} True if successful, false otherwise
    */
   const deleteComment = async (commentId, userId) => {
+    console.log('[useComments] deleteComment called', { commentId, userId })
     if (!commentId || !userId) {
       console.error('Cannot delete comment: commentId and userId are required')
       return false
@@ -195,10 +216,36 @@ export const useComments = (postId) => {
     error.value = null
 
     try {
+      console.log('[useComments] Sending delete request to API...')
       await socialInteractionService.deleteComment(commentId, userId)
+      console.log('[useComments] API delete successful')
 
-      // Remove from local state
-      comments.value = comments.value.filter(c => c.id !== commentId)
+      // Remove from local state - create a new array to ensure reactivity
+      const beforeCount = comments.value.length
+      console.log(`[useComments] Before filter - count: ${beforeCount}`)
+      console.log(`[useComments] ID to delete: "${commentId}" (type: ${typeof commentId})`)
+
+      // Convert to string for comparison to handle type mismatches
+      const commentIdStr = String(commentId)
+      
+      // Log all IDs to see what we have
+      console.log('[useComments] Available IDs:', comments.value.map(c => ({ id: c.id, type: typeof c.id })))
+
+      const newComments = comments.value.filter(c => {
+        const isMatch = String(c.id) === commentIdStr
+        if (isMatch) console.log('[useComments] Found match to delete:', c)
+        return !isMatch
+      })
+      
+      comments.value = newComments
+      const afterCount = comments.value.length
+      console.log(`[useComments] After filter - count: ${afterCount}`)
+
+      if (beforeCount === afterCount) {
+        console.warn('[useComments] WARNING: No comment was removed from the list! Check IDs.')
+      } else {
+        console.log('[useComments] Comment successfully removed from local state')
+      }
 
       return true
 

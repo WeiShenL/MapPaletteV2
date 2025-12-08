@@ -134,8 +134,8 @@ const handleComment = () => {
 }
 
 const handleShare = () => {
-  // Generate the share URL
-  const shareUrl = `${window.location.origin}/homepage?id=${props.post.id}`
+  // Generate the share URL using dedicated post page
+  const shareUrl = `${window.location.origin}/post/${props.post.id}`
 
   // Try to copy to clipboard
   if (navigator.clipboard && navigator.clipboard.writeText) {

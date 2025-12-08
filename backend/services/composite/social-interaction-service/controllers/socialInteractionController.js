@@ -52,7 +52,7 @@ exports.likePost = async (req, res) => {
     );
 
     // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
     const post = postResponse.data;
 
     // Step 3: Award points to content creator
@@ -64,7 +64,7 @@ exports.likePost = async (req, res) => {
     await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
       field: 'likeCount',
       increment: 1
-    });
+    }, { headers: getServiceHeaders() });
 
     console.log(`[LIKE] Successfully liked post ${postId} by user ${userId}`);
     return res.status(200).json({
@@ -101,7 +101,7 @@ exports.unlikePost = async (req, res) => {
     );
 
     // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
     const post = postResponse.data;
 
     // Step 3: Remove points from content creator
@@ -113,7 +113,7 @@ exports.unlikePost = async (req, res) => {
     await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
       field: 'likeCount',
       increment: -1
-    });
+    }, { headers: getServiceHeaders() });
 
     console.log(`[UNLIKE] Successfully unliked post ${postId} by user ${userId}`);
     return res.status(200).json({ message: 'Post unliked successfully!' });
@@ -147,7 +147,7 @@ exports.sharePost = async (req, res) => {
     );
 
     // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
     const post = postResponse.data;
 
     // Step 3: Award points to content creator
@@ -159,7 +159,7 @@ exports.sharePost = async (req, res) => {
     await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
       field: 'shareCount',
       increment: 1
-    });
+    }, { headers: getServiceHeaders() });
 
     console.log(`[SHARE] Successfully shared post ${postId} by user ${userId}`);
     return res.status(200).json({
@@ -198,7 +198,7 @@ exports.addComment = async (req, res) => {
     );
 
     // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/?id=${postId}`);
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
     const post = postResponse.data;
 
     // Step 3: Award points to content creator (if not commenting on own post)
@@ -210,13 +210,15 @@ exports.addComment = async (req, res) => {
     await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
       field: 'commentCount',
       increment: 1
-    });
+    }, { headers: getServiceHeaders() });
 
     console.log(`[COMMENT] Successfully added comment to post ${postId} by user ${userId}`);
+    // The interaction service returns { comment: { id, ... } }, extract the id
+    const commentData = interactionResponse.data.comment;
     return res.status(201).json({
       message: 'Comment added successfully!',
-      commentId: interactionResponse.data.commentId,
-      comment: interactionResponse.data.comment
+      commentId: commentData?.id,
+      comment: commentData
     });
   } catch (error) {
     console.error(`[COMMENT] Error adding comment to post ${postId} by user ${userId}:`, error.message);
@@ -254,7 +256,7 @@ exports.deleteComment = async (req, res) => {
       await axios.patch(`${POST_SERVICE_URL}/${comment.entityId}/count`, {
         field: 'commentCount',
         increment: -1
-      });
+      }, { headers: getServiceHeaders() });
     }
 
     console.log(`[DELETE_COMMENT] Successfully deleted comment ${commentId}`);
@@ -278,14 +280,19 @@ exports.getPostInteractions = async (req, res) => {
   const { postId } = req.params;
   const { userId } = req.query; 
 
+  console.log(`[GET_INTERACTIONS] Fetching interactions for post ${postId} (user: ${userId})`);
+
   try {
     // Fetch all interaction data in parallel
+    console.log(`[GET_INTERACTIONS] Calling interaction service...`);
     const [likesResponse, commentsResponse, sharesResponse, userInteractionResponse] = await Promise.all([
       axios.get(`${INTERACTION_SERVICE_URL}/likes/post/${postId}`),
       axios.get(`${INTERACTION_SERVICE_URL}/comments/post/${postId}`),
       axios.get(`${INTERACTION_SERVICE_URL}/shares/post/${postId}`),
       userId ? axios.get(`${INTERACTION_SERVICE_URL}/check/post/${postId}/${userId}`) : null
     ]);
+
+    console.log(`[GET_INTERACTIONS] Received comments: ${commentsResponse.data?.length || 0}`);
 
     const response = {
       likes: likesResponse.data,
