@@ -12,7 +12,7 @@
     @close="cancelDeleteComment"
   />
 
-  <div class="modal fade" tabindex="-1" ref="modalRef" @hidden.bs.modal="handleClose">
+  <div class="modal fade" tabindex="-1" ref="modalRef">
     <div class="modal-dialog modal-xl">
       <div class="modal-content">
         <!-- Modal Header -->
@@ -89,7 +89,7 @@
             </p>
             <p class="text-muted mb-3">
               <i class="fas fa-thumbs-up"></i> {{ post.likeCount || 0 }} Likes |
-              <i class="fas fa-comment"></i> {{ commentCount }} Comments |
+              <i class="fas fa-comment"></i> {{ post.commentCount || 0 }} Comments |
               <i class="fas fa-share"></i> {{ post.shareCount || 0 }} Shares
             </p>
           </div>
@@ -483,17 +483,46 @@ const close = () => {
   modal.value?.hide()
 }
 
+// Track if modal is currently closing to prevent race conditions
+const isClosing = ref(false)
+
 /**
- * Handle modal close event
+ * Handle modal close event - called when Bootstrap modal is fully hidden
  */
 const handleClose = () => {
+  if (isClosing.value) return // Prevent double emission
+  isClosing.value = true
+
+  // Clean up Bootstrap artifacts immediately
+  cleanupModal()
+
   emit('close')
+}
+
+/**
+ * Clean up Bootstrap modal artifacts
+ */
+const cleanupModal = () => {
+  // Remove all backdrops (there might be multiple)
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    backdrop.remove()
+  })
+
+  // Remove modal-open class from body
+  document.body.classList.remove('modal-open')
+  document.body.style.removeProperty('overflow')
+  document.body.style.removeProperty('padding-right')
 }
 
 // Lifecycle hooks
 onMounted(async () => {
   // Initialize Bootstrap modal
   modal.value = new Modal(modalRef.value)
+
+  // Listen for Bootstrap's hidden event to properly emit close
+  // Vue's @hidden.bs.modal doesn't work for Bootstrap custom events
+  modalRef.value?.addEventListener('hidden.bs.modal', handleClose)
+
   modal.value.show()
 
   // Load comments
@@ -501,7 +530,24 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  modal.value?.dispose()
+  // Remove event listener first
+  if (modalRef.value) {
+    modalRef.value.removeEventListener('hidden.bs.modal', handleClose)
+  }
+
+  // Dispose the modal
+  if (modal.value) {
+    try {
+      modal.value.hide()
+      modal.value.dispose()
+    } catch (e) {
+      // Ignore errors during disposal
+    }
+    modal.value = null
+  }
+
+  // Always clean up Bootstrap artifacts on unmount
+  cleanupModal()
 })
 </script>
 

@@ -37,54 +37,57 @@
         <!-- Post Content -->
         <div v-else-if="post" class="row justify-content-center">
           <div class="col-lg-8 col-md-10">
-            <div class="card shadow-sm">
-              <div class="card-body p-4">
-                <!-- Header -->
-                <div class="post-header d-flex justify-content-between align-items-start mb-3">
-                  <div class="header-content flex-grow-1">
-                    <h5 class="modal-title">{{ post.title }}</h5>
-                    <div class="d-flex align-items-center gap-2 mt-2">
-                      <!-- User profile picture -->
-                      <router-link :to="`/profile/${post.userId}`">
-                        <img
-                          :src="post.user?.profilePicture || '/resources/images/default-profile.png'"
-                          alt="Profile"
-                          class="rounded-circle"
-                          style="width: 32px; height: 32px; object-fit: cover;"
-                        >
+            <div class="card shadow-sm post-card">
+              <!-- Gradient Header (matching PostDetailModal) -->
+              <div class="post-header-gradient d-flex justify-content-between align-items-start">
+                <div class="header-content flex-grow-1">
+                  <h5 class="post-title">{{ post.title }}</h5>
+                  <div class="d-flex align-items-center gap-2 mt-2">
+                    <!-- User profile picture -->
+                    <router-link :to="`/profile/${post.userId}`">
+                      <img
+                        :src="post.user?.profilePicture || '/resources/images/default-profile.png'"
+                        alt="Profile"
+                        class="rounded-circle"
+                        style="width: 32px; height: 32px; object-fit: cover; border: 2px solid rgba(255,255,255,0.5);"
+                      >
+                    </router-link>
+                    <h6 class="post-author mb-0">
+                      by
+                      <router-link
+                        :to="`/profile/${post.userId}`"
+                        class="text-decoration-none text-white"
+                      >
+                        {{ post.user?.username || 'Unknown User' }}
                       </router-link>
-                      <h6 class="modal-author text-muted mb-0">
-                        by
-                        <router-link
-                          :to="`/profile/${post.userId}`"
-                          class="text-decoration-none"
-                        >
-                          {{ post.user?.username || 'Unknown User' }}
-                        </router-link>
-                      </h6>
-                      <!-- Edit dropdown for post owner -->
-                      <div v-if="isOwnPost" class="dropdown ms-auto">
-                        <button
-                          class="btn btn-link text-dark p-0"
-                          type="button"
-                          data-bs-toggle="dropdown"
-                          aria-expanded="false"
-                        >
-                          <i class="fas fa-ellipsis-h"></i>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end">
-                          <li>
-                            <button class="dropdown-item" @click="handleEdit">
-                              <i class="fas fa-edit me-2"></i>Edit Post
-                            </button>
-                          </li>
-                        </ul>
-                      </div>
+                    </h6>
+                    <!-- Edit dropdown for post owner -->
+                    <div v-if="isOwnPost" class="dropdown ms-auto">
+                      <button
+                        class="btn btn-link text-white p-0"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                      >
+                        <i class="fas fa-ellipsis-h"></i>
+                      </button>
+                      <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                          <button class="dropdown-item" @click="handleEdit">
+                            <i class="fas fa-edit me-2"></i>Edit Post
+                          </button>
+                        </li>
+                      </ul>
                     </div>
                   </div>
-                  <router-link to="/homepage" class="btn btn-close ms-2" aria-label="Close"></router-link>
                 </div>
+                <router-link to="/homepage" class="btn-close-white ms-2" aria-label="Close">
+                  <i class="fas fa-times"></i>
+                </router-link>
+              </div>
 
+              <!-- Card Body -->
+              <div class="card-body p-4">
                 <!-- Route Image -->
                 <div class="modal-image mb-3">
                   <img
@@ -281,14 +284,6 @@
         @close="cancelDeleteComment"
       />
 
-      <!-- Debug Info (Temporary) -->
-      <div class="container mt-4 p-3 bg-light border rounded" style="font-family: monospace; font-size: 12px; opacity: 0.7;">
-        <h6 class="mb-2">Debug Info</h6>
-        <div>Comments Version: {{ commentsVersion }}</div>
-        <div>Total Comments: {{ commentCount }}</div>
-        <div>Displayed Comments: {{ displayedComments.length }}</div>
-        <div>Has More: {{ hasMoreComments }}</div>
-      </div>
     </div>
 
     <!-- Footer -->
@@ -570,15 +565,59 @@ onMounted(() => {
   padding-top: 80px;
 }
 
-.modal-title {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+/* Post card styling */
+.post-card {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
-.modal-author {
-  font-size: 0.9rem;
-  margin-bottom: 0;
+/* Gradient header (matching PostDetailModal) */
+.post-header-gradient {
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53, #FFD54F);
+  color: #fff;
+  padding: 20px;
+  border-bottom: none;
+}
+
+.post-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.post-author {
+  font-size: 0.875rem;
+  color: #f8f9fa;
+}
+
+.post-author a:hover {
+  text-decoration: underline !important;
+}
+
+.btn-close-white {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  text-decoration: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.btn-close-white:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 .modal-image {
