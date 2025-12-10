@@ -226,13 +226,22 @@ const getPost = async (req, res) => {
 // Update post
 const updatePost = async (req, res) => {
   const postID = req.query.id || req.query.postId;
-  const { title, description, imageUrl } = req.body;
+  const { title, description, imageUrl, image, waypoints, color, distance, region } = req.body;
 
   if (!postID) {
     return res.status(400).json({ message: 'Post ID is required' });
   }
 
   console.log(`[UPDATE_POST] Updating post ${postID}`);
+
+  // Handle waypoints - convert to JSON string if array
+  let waypointsData = waypoints;
+  if (waypoints && Array.isArray(waypoints)) {
+    waypointsData = JSON.stringify(waypoints);
+  }
+
+  // Use image as fallback for imageUrl
+  const finalImageUrl = imageUrl || image;
 
   try {
     // Check if post exists and user owns it (should be done by middleware)
@@ -241,7 +250,11 @@ const updatePost = async (req, res) => {
       data: {
         ...(title && { title }),
         ...(description !== undefined && { description }),
-        ...(imageUrl !== undefined && { imageUrl }),
+        ...(finalImageUrl !== undefined && { imageUrl: finalImageUrl }),
+        ...(waypointsData !== undefined && { waypoints: waypointsData }),
+        ...(color !== undefined && { color }),
+        ...(distance !== undefined && { distance: parseFloat(distance) }),
+        ...(region !== undefined && { region }),
       },
     });
 

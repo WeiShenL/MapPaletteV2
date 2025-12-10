@@ -161,7 +161,8 @@ const commentCount = computed(() => {
 
 // Methods
 const handleEdit = () => {
-  window.location.href = `/create-route?id=${props.activity.id}`
+  // Edit mode - update existing post
+  window.location.href = `/create-route?id=${props.activity.id}&mode=edit`
 }
 
 const likePost = async () => {
@@ -169,6 +170,7 @@ const likePost = async () => {
 }
 
 const useRoute = () => {
+  // Use mode - create new post based on this route (no mode parameter)
   window.location.href = `/create-route?id=${props.activity.id}`
 }
 

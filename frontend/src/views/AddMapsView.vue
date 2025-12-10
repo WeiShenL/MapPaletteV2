@@ -959,19 +959,32 @@ export default {
         // Load map data into form fields
         postTitle.value = response.data.title
         postDescription.value = response.data.description
-        postIdUserID.value = response.data.userID
+        // Note: Post response has user.id nested, but also check for direct userId/userID
+        postIdUserID.value = response.data.user?.id || response.data.userId || response.data.userID
         currentColor.value = response.data.color || '#e81416'
-        
-        // Check if the current user owns the map
-        if (postIdUserID.value === userID.value) {
-          // User is the owner, allow editing
+
+        // Check if the current user owns the map and is in edit mode
+        const isOwner = postIdUserID.value === userID.value
+        const mode = route.query.mode || null
+
+        console.log('[AddMapsView] fetchMapData - Post owner:', postIdUserID.value, 'Current user:', userID.value, 'isOwner:', isOwner, 'Mode:', mode)
+
+        if (isOwner && mode === 'edit') {
+          // User is the owner AND explicitly in edit mode - allow editing
           isEditing.value = true
-        } else {
-          // User is not the owner, set as new map
-          const originalPostId = postId.value
+          console.log('[AddMapsView] Edit mode enabled - will update existing post')
+        } else if (isOwner && mode !== 'edit') {
+          // User is the owner but in "use" mode - create a copy
           postId.value = null // Clears postId for new save
           isEditing.value = false // Switch to "create" mode
-          setAlert('error', `You are viewing a copy of this map (ID: ${originalPostId}). Changes will save as a new post.`)
+          setAlert('success', `Using your map as a template. Changes will be saved as a new post.`)
+          console.log('[AddMapsView] Use mode (owner) - will create new post')
+        } else {
+          // User is not the owner - set as new map (copy)
+          postId.value = null // Clears postId for new save
+          isEditing.value = false // Switch to "create" mode
+          setAlert('success', `Using this map as a template. Changes will be saved as a new post.`)
+          console.log('[AddMapsView] Use mode (not owner) - will create new post')
         }
         
         // Store original waypoints for undo functionality
@@ -1315,13 +1328,17 @@ export default {
           
           // Check if editing existing post
           postId.value = route.query.id || null
-          isEditing.value = !!postId.value
-          
+          const mode = route.query.mode || null // 'edit' for edit mode, null/undefined for use/copy mode
+
+          // isEditing is true only if we have a postId AND mode is explicitly 'edit'
+          // This allows owners to "use" their own post as a template for a new post
+          isEditing.value = !!postId.value && mode === 'edit'
+
           // Load Google Maps
           await loadGoogleMapsScript()
-          
-          // If editing, fetch the map data after maps is loaded
-          if (isEditing.value && postId.value) {
+
+          // If we have a postId (either edit or use), fetch the map data after maps is loaded
+          if (postId.value) {
             // Wait for initMap to be called by Google Maps callback
             setTimeout(async () => {
               await fetchMapData()

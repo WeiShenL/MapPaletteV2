@@ -118,14 +118,14 @@ const createPostSchema = z.object({
 });
 
 const updatePostSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  title: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional(),
-  routeData: z.record(z.any()).optional(),
-  distance: z.number().positive().optional(),
-  duration: z.number().positive().optional(),
-  difficulty: z.enum(['easy', 'moderate', 'hard']).optional(),
-  isPublic: z.boolean().optional(),
-  tags: z.array(z.string()).max(10).optional(),
+  waypoints: z.any().optional(), // Can be string or array of waypoint objects
+  color: z.string().optional(),
+  region: z.string().optional(),
+  distance: z.union([z.string(), z.number()]).optional(), // Can be string or number
+  imageUrl: z.string().url().optional(),
+  image: z.string().url().optional(), // Alias for imageUrl
 });
 
 // Interaction schemas

@@ -29,7 +29,8 @@ const createRedisClient = () => {
 
 /**
  * Map image generation rate limiter
- * Very strict limits to prevent Google Maps API abuse
+ * Generous limits for normal usage, prevents abuse
+ * 120 map generations per hour per user (~2 per minute)
  */
 const createMapGenerationLimiter = () => {
   const redisClient = createRedisClient();
@@ -40,14 +41,14 @@ const createMapGenerationLimiter = () => {
       prefix: 'rl:map:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 50, // 50 map generations per hour per user
+    max: 120, // 120 map generations per hour per user (~2 per minute)
     message: {
       success: false,
       error: {
-        code: 'RATE_LIMIT_EXCEEDED',
-        message: 'Rate limit exceeded: Maximum 50 posts per hour. Please wait before creating more posts.',
+        code: 'MAP_GENERATION_RATE_LIMIT',
+        message: 'You have reached the map generation limit. Please wait before creating more posts with maps.',
         retryAfter: '1 hour',
-        limit: 50,
+        limit: 120,
       },
     },
     standardHeaders: true,
@@ -75,10 +76,11 @@ const createMapGenerationLimiter = () => {
       res.status(429).json({
         success: false,
         error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: `Rate limit exceeded: Maximum ${req.rateLimit.limit} posts per hour. Please try again in ${retryAfterText}.`,
+          code: 'MAP_GENERATION_RATE_LIMIT',
+          message: `Map generation limit reached (${req.rateLimit.current}/${req.rateLimit.limit} per hour). Please try again in ${retryAfterText}.`,
           limit: req.rateLimit.limit,
           current: req.rateLimit.current,
+          remaining: Math.max(0, req.rateLimit.limit - req.rateLimit.current),
           resetTime: req.rateLimit.resetTime,
           retryAfter: retryAfterText,
         },
@@ -95,6 +97,7 @@ const createMapGenerationLimiter = () => {
 /**
  * Global map generation rate limiter (across all users)
  * Prevents total API quota exhaustion
+ * 2000 total map generations per hour across all users
  */
 const createGlobalMapLimiter = () => {
   const redisClient = createRedisClient();
@@ -105,12 +108,12 @@ const createGlobalMapLimiter = () => {
       prefix: 'rl:map:global:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 500, // 500 total map generations per hour across all users
+    max: 2000, // 2000 total map generations per hour across all users
     message: {
       success: false,
       error: {
-        code: 'GLOBAL_RATE_LIMIT_EXCEEDED',
-        message: 'System is currently generating too many maps. Please try again in a few minutes.',
+        code: 'GLOBAL_MAP_LIMIT',
+        message: 'The system is experiencing high demand. Please try again in a few minutes.',
         retryAfter: '15 minutes',
       },
     },
@@ -119,6 +122,8 @@ const createGlobalMapLimiter = () => {
     // Global key (same for everyone)
     keyGenerator: () => 'global',
     handler: (req, res) => {
+      const minutesRemaining = Math.ceil((req.rateLimit.resetTime.getTime() - Date.now()) / 60000);
+
       if (global.logger) {
         global.logger.error('Global map generation rate limit exceeded', {
           limit: req.rateLimit.limit,
@@ -130,10 +135,12 @@ const createGlobalMapLimiter = () => {
       res.status(503).json({
         success: false,
         error: {
-          code: 'GLOBAL_RATE_LIMIT_EXCEEDED',
-          message: 'System is currently generating too many maps. Please try again in a few minutes.',
+          code: 'GLOBAL_MAP_LIMIT',
+          message: `The system is experiencing high demand (${req.rateLimit.current}/${req.rateLimit.limit} maps generated this hour). Please try again in ${minutesRemaining} minutes.`,
           limit: req.rateLimit.limit,
+          current: req.rateLimit.current,
           resetTime: req.rateLimit.resetTime,
+          retryAfter: `${minutesRemaining} minutes`,
         },
       });
     },
@@ -145,6 +152,7 @@ const createGlobalMapLimiter = () => {
 
 /**
  * IP-based rate limiter (backup in case user ID is missing)
+ * 60 map generations per hour per IP
  */
 const createIPMapLimiter = () => {
   const redisClient = createRedisClient();
@@ -155,17 +163,32 @@ const createIPMapLimiter = () => {
       prefix: 'rl:map:ip:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 20, // 20 map generations per hour per IP
+    max: 60, // 60 map generations per hour per IP (~1 per minute)
     message: {
       success: false,
       error: {
-        code: 'IP_RATE_LIMIT_EXCEEDED',
-        message: 'Too many requests from this IP address. Please try again later.',
+        code: 'IP_MAP_LIMIT',
+        message: 'Too many map generation requests from this network. Please try again later.',
       },
     },
     standardHeaders: true,
     legacyHeaders: false,
     keyGenerator: (req) => req.ip,
+    handler: (req, res) => {
+      const minutesRemaining = Math.ceil((req.rateLimit.resetTime.getTime() - Date.now()) / 60000);
+
+      res.status(429).json({
+        success: false,
+        error: {
+          code: 'IP_MAP_LIMIT',
+          message: `Too many map generation requests from this network (${req.rateLimit.current}/${req.rateLimit.limit} per hour). Please try again in ${minutesRemaining} minutes.`,
+          limit: req.rateLimit.limit,
+          current: req.rateLimit.current,
+          resetTime: req.rateLimit.resetTime,
+          retryAfter: `${minutesRemaining} minutes`,
+        },
+      });
+    },
     skip: (req) => {
       return !!req.body.imageUrl;
     },

@@ -353,10 +353,10 @@ const isOwnPost = computed(() => {
 })
 
 /**
- * Handle edit button click
+ * Handle edit button click - opens in edit mode to update existing post
  */
 const handleEdit = () => {
-  window.location.href = `/create-route?id=${post.value.id}`
+  window.location.href = `/create-route?id=${post.value.id}&mode=edit`
 }
 
 /**

@@ -356,9 +356,9 @@ const isOwnPost = computed(() => {
   return currentUser.value.id === post.value.userId
 })
 
-// Handle edit post
+// Handle edit post - opens in edit mode to update existing post
 const handleEdit = () => {
-  router.push(`/edit-post/${postId}`)
+  router.push(`/create-route?id=${postId}&mode=edit`)
 }
 
 // Wrapper for deleteComment that forces re-render

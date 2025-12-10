@@ -32,19 +32,31 @@ const createRateLimiter = (options = {}) => {
     legacyHeaders: false, // Disable the `X-RateLimit-*` headers
     // Error handler
     handler: (req, res) => {
+      const retryAfter = res.getHeader('Retry-After');
+      const resetTime = req.rateLimit?.resetTime;
+      const minutesRemaining = resetTime
+        ? Math.ceil((new Date(resetTime).getTime() - Date.now()) / 60000)
+        : Math.ceil(retryAfter / 60);
+
       if (global.logger) {
         global.logger.warn('Rate limit exceeded', {
           ip: req.ip,
           path: req.path,
           requestId: req.id,
+          limit: req.rateLimit?.limit,
+          current: req.rateLimit?.current,
         });
       }
       res.status(429).json({
         success: false,
         error: {
           code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Too many requests, please try again later',
-          retryAfter: res.getHeader('Retry-After'),
+          message: `Too many requests (${req.rateLimit?.current || 'N/A'}/${req.rateLimit?.limit || 'N/A'}). Please try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+          limit: req.rateLimit?.limit,
+          current: req.rateLimit?.current,
+          remaining: req.rateLimit ? Math.max(0, req.rateLimit.limit - req.rateLimit.current) : 0,
+          retryAfter: `${minutesRemaining} minutes`,
+          resetTime: resetTime,
         },
       });
     },
@@ -75,62 +87,62 @@ const createRateLimiter = (options = {}) => {
 };
 
 /**
- * Strict rate limiter for sensitive endpoints (auth, writes)
- * 10 requests per 15 minutes
+ * Strict rate limiter for sensitive endpoints (delete operations)
+ * 60 requests per 15 minutes (~4 per minute)
  */
 const strictLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 10,
-  message: 'Too many requests to this endpoint, please try again later',
+  max: 60,
+  message: 'Too many delete requests. Please slow down.',
 });
 
 /**
- * Moderate rate limiter for regular API endpoints
- * 100 requests per 15 minutes
+ * Moderate rate limiter for regular API endpoints (likes, comments, shares)
+ * 300 requests per 15 minutes (~20 per minute, ~1 every 3 seconds)
  */
 const moderateLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
 });
 
 /**
  * Lenient rate limiter for read-heavy endpoints
- * 500 requests per 15 minutes
+ * 1000 requests per 15 minutes
  */
 const lenientLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 1000,
 });
 
 /**
- * Authentication rate limiter (very strict)
- * 5 attempts per 15 minutes to prevent brute force
+ * Authentication rate limiter (strict but reasonable)
+ * 10 attempts per 15 minutes to prevent brute force
  */
 const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 10,
   skipSuccessfulRequests: true, // Only count failed attempts
-  message: 'Too many authentication attempts, please try again later',
+  message: 'Too many authentication attempts. Please try again in a few minutes.',
 });
 
 /**
- * Create rate limiter (very strict)
- * 20 creates per hour to prevent spam
+ * Create rate limiter for posts
+ * 60 creates per hour (~1 per minute)
  */
 const createLimiter = createRateLimiter({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20,
-  message: 'Too many items created, please try again later',
+  max: 60,
+  message: 'You can create up to 60 posts per hour. Please try again later.',
 });
 
 /**
  * Global rate limiter for entire API
- * 1000 requests per 15 minutes per IP
+ * 2000 requests per 15 minutes per IP
  */
 const globalLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 1000,
-  message: 'Too many requests from this IP, please try again later',
+  max: 2000,
+  message: 'Too many requests from this IP. Please slow down.',
 });
 
 module.exports = {
