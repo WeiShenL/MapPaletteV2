@@ -120,24 +120,34 @@ export const normalizePosts = (posts) => {
 export const normalizeComment = (comment) => {
   if (!comment) return null
 
+  // Extract user info from nested user object if available
+  const user = comment.user || {}
+
   return {
     // Identity - CANONICAL: id, userId
     id: comment.id || comment.commentId || comment._id,
-    userId: comment.userId || comment.userID || comment.authorId,
+    userId: comment.userId || comment.userID || comment.authorId || user.id,
 
     // Content - CANONICAL: content (primary), text (alias)
     content: comment.content || comment.text || '',
     text: comment.text || comment.content || '',
 
-    // Author - CANONICAL: username
-    username: comment.username || comment.authorName || 'Anonymous',
+    // Author - CANONICAL: username (check nested user object first)
+    username: comment.username || user.username || comment.authorName || 'Anonymous',
 
     // Timestamps - CANONICAL: createdAt
     createdAt: comment.createdAt || comment.created_at || comment.timestamp || new Date().toISOString(),
 
     // Frontend helpers
     timeAgo: comment.timeAgo,
-    avatar: comment.avatar || comment.profilePicture
+    avatar: comment.avatar || comment.profilePicture || user.profilePicture,
+
+    // Preserve user object for components that need it
+    user: {
+      id: comment.userId || user.id,
+      username: comment.username || user.username || 'Anonymous',
+      profilePicture: comment.avatar || comment.profilePicture || user.profilePicture
+    }
   }
 }
 

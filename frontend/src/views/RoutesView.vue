@@ -147,10 +147,15 @@
 
             <!-- Cards -->
             <div class="row mt-4" :style="{ opacity: isFilterLoading ? 0.6 : 1 }">
-              <template v-if="filteredRoutes.length > 0">
-                <RouteCards :routes="normalizedRoutes" @open-modal="openRouteModal" />
+              <template v-if="filteredRoutes && filteredRoutes.length > 0">
+                <RouteCards
+                  :routes="normalizedRoutes"
+                  @open-modal="openRouteModal"
+                  @like="handleRouteLike"
+                  @share="handleRouteShare"
+                />
               </template>
-              <template v-else-if="!isFilterLoading">
+              <template v-else-if="!isFilterLoading && !isLoading">
                 <div class="text-center mt-4">
                   <p>Sorry! No routes found that matches your search 😢</p>
                   <p>Would you like to <router-link to="/create-route">create</router-link> one?</p>
@@ -242,6 +247,9 @@ export default {
 
     // Normalize routes to ensure consistent property names
     const normalizedRoutes = computed(() => {
+      if (!filteredRoutes.value || !Array.isArray(filteredRoutes.value)) {
+        return [];
+      }
       return normalizePosts(filteredRoutes.value);
     });
 
@@ -277,14 +285,18 @@ export default {
           userId: userId
         });
         
+        // Safely extract posts from response (handles different response formats)
+        const posts = response?.posts || response?.data?.posts || response || [];
+        const pagination = response?.pagination || response?.data?.pagination || {};
+
         if (currentPage.value === 1) {
-          filteredRoutes.value = response.posts;
+          filteredRoutes.value = Array.isArray(posts) ? posts : [];
         } else {
-          filteredRoutes.value = [...filteredRoutes.value, ...response.posts];
+          filteredRoutes.value = [...(filteredRoutes.value || []), ...(Array.isArray(posts) ? posts : [])];
         }
-        
-        totalPages.value = response.pagination.totalPages;
-        hasMore.value = response.pagination.hasMore;
+
+        totalPages.value = pagination.totalPages || 1;
+        hasMore.value = pagination.hasMore || false;
         
       } catch (error) {
         console.error("Error fetching routes:", error);

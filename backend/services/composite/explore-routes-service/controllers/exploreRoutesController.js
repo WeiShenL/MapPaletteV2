@@ -6,18 +6,42 @@ const USER_SERVICE_BASE = process.env.USER_SERVICE_URL || 'http://localhost:3001
 const INTERACTION_SERVICE_BASE = process.env.INTERACTION_SERVICE_URL || 'http://localhost:3003';
 
 // full service url with API paths
-const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api`;
+const POST_SERVICE_URL = `${POST_SERVICE_BASE}/api/posts`;
 const USER_SERVICE_URL = `${USER_SERVICE_BASE}/api/users`;
 const INTERACTION_SERVICE_URL = `${INTERACTION_SERVICE_BASE}/api/interactions`;
+
+// Helper function to get user ID from post (handles different naming conventions)
+const getUserIdFromPost = (post) => {
+  return post.userId || post.user?.id || post.userID;
+};
+
+// Helper function to get post ID from post (handles different naming conventions)
+const getPostIdFromPost = (post) => {
+  return post.id || post.postID;
+};
 
 // Helper function to fetch user data for posts
 const enrichPostsWithUserData = async (posts) => {
   try {
-    // Get unique user IDs
-    const userIds = [...new Set(posts.map(post => post.userID))];
-    
+    // Check if posts already have user data embedded (Prisma includes it)
+    const postsNeedEnrichment = posts.filter(post => !post.user && !post.username);
+
+    if (postsNeedEnrichment.length === 0) {
+      // All posts already have user data, just normalize the format
+      return posts.map(post => ({
+        ...post,
+        username: post.username || post.user?.username || 'Unknown User',
+        userAvatar: post.userAvatar || post.user?.profilePicture || null,
+        userID: getUserIdFromPost(post), // Normalize to userID for compatibility
+        postID: getPostIdFromPost(post), // Normalize to postID for compatibility
+      }));
+    }
+
+    // Get unique user IDs for posts that need enrichment
+    const userIds = [...new Set(postsNeedEnrichment.map(post => getUserIdFromPost(post)).filter(Boolean))];
+
     // Fetch user data in parallel
-    const userPromises = userIds.map(userId => 
+    const userPromises = userIds.map(userId =>
       axios.get(`${USER_SERVICE_URL}/${userId}`)
         .then(response => ({ userId, userData: response.data }))
         .catch(error => {
@@ -25,9 +49,9 @@ const enrichPostsWithUserData = async (posts) => {
           return { userId, userData: null };
         })
     );
-    
+
     const userResults = await Promise.all(userPromises);
-    
+
     // Create user map
     const userMap = {};
     userResults.forEach(({ userId, userData }) => {
@@ -35,13 +59,18 @@ const enrichPostsWithUserData = async (posts) => {
         userMap[userId] = userData;
       }
     });
-    
+
     // Enrich posts with user data
-    return posts.map(post => ({
-      ...post,
-      username: userMap[post.userID]?.username || 'Unknown User',
-      userAvatar: userMap[post.userID]?.profilePicture || null
-    }));
+    return posts.map(post => {
+      const userId = getUserIdFromPost(post);
+      return {
+        ...post,
+        username: post.username || post.user?.username || userMap[userId]?.username || 'Unknown User',
+        userAvatar: post.userAvatar || post.user?.profilePicture || userMap[userId]?.profilePicture || null,
+        userID: userId, // Normalize to userID for compatibility
+        postID: getPostIdFromPost(post), // Normalize to postID for compatibility
+      };
+    });
   } catch (error) {
     console.error('Error enriching posts with user data:', error);
     // Return posts without enrichment if there's an error
@@ -64,17 +93,22 @@ const enrichPostsWithInteractions = async (posts, currentUserId = null) => {
       
       try {
         // Fetch all interactions in parallel from interaction service
+        console.log(`[ENRICH] Fetching interactions from ${INTERACTION_SERVICE_URL}/likes/post/${postId}`);
         const [likesResponse, commentsResponse, sharesResponse] = await Promise.all([
           axios.get(`${INTERACTION_SERVICE_URL}/likes/post/${postId}`),
           axios.get(`${INTERACTION_SERVICE_URL}/comments/post/${postId}`),
           axios.get(`${INTERACTION_SERVICE_URL}/shares/post/${postId}`)
         ]);
-        
+
         interactions.likes = likesResponse.data;
         interactions.comments = commentsResponse.data;
         interactions.shares = sharesResponse.data;
+        console.log(`[ENRICH] Got likes for post ${postId}:`, JSON.stringify(interactions.likes));
       } catch (error) {
         console.error(`Error fetching interactions for post ${postId}:`, error.message);
+        if (error.response) {
+          console.error(`Response status: ${error.response.status}, data:`, error.response.data);
+        }
       }
       
       // Check if current user has liked the post
@@ -111,7 +145,7 @@ const getAllRoutes = async (req, res) => {
       userId = null
     } = req.query;
     
-    console.log(`[GET_ALL_ROUTES] Fetching routes - page: ${page}, limit: ${limit}, sortBy: ${sortBy}, search: ${search}`);
+    console.log(`[GET_ALL_ROUTES] Fetching routes - page: ${page}, limit: ${limit}, sortBy: ${sortBy}, search: ${search}, userId: ${userId}`);
     
     // Fetch all posts from post service
     const postsResponse = await axios.get(`${POST_SERVICE_URL}/allposts`);

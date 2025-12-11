@@ -634,6 +634,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - POST_SERVICE_URL=http://post-service:5000
       - USER_SERVICE_URL=http://user-service:5000
+      - INTERACTION_SERVICE_URL=http://interaction-service:5000
     networks:
       - mappalette-network
     volumes:

@@ -42,43 +42,45 @@
         
         <!-- Top 3 Players Section -->
         <div class="top-players-section" v-if="topPlayers.length > 0">
-          <div class="row mb-5">
-            <div 
-              v-for="(player, index) in topPlayers" 
+          <div class="row justify-content-center mb-5">
+            <div
+              v-for="(player, index) in topPlayers"
               :key="player.userId"
-              class="col-md-4"
+              class="col-12 col-sm-6 col-lg-4 mb-4"
             >
-              <div 
-                class="player-card top-player-card"
-                :class="{ 
+              <div
+                class="player-card top-player-card h-100"
+                :class="{
                   'current-user-card bounce': isCurrentUser(player.userId),
                   [`rank-${index + 1}`]: true
                 }"
                 @mouseenter="triggerConfetti(player.userId, index)"
               >
-                <div class="d-flex align-items-center">
-                  <img 
-                    :src="player.profilePicture || '/resources/images/default-profile.png'" 
-                    :alt="player.username" 
-                    class="profile-pic me-3"
-                    @click="goToProfile(player.userId)"
-                  >
-                  <div class="flex-grow-1">
-                    <h5 class="mb-1">{{ player.username }}</h5>
-                    <span :class="`rank-badge ${leaderboardService.getRankClass(player.tier)}`">
-                      {{ player.tier }}
-                    </span>
+                <div class="top-player-header">
+                  <div class="player-info">
+                    <img
+                      :src="player.profilePicture || '/resources/images/default-profile.png'"
+                      :alt="player.username"
+                      class="profile-pic"
+                      @click="goToProfile(player.userId)"
+                    >
+                    <div class="player-details">
+                      <h5 class="player-name">{{ player.username }}</h5>
+                      <span :class="`rank-badge ${leaderboardService.getRankClass(player.tier)}`">
+                        {{ player.tier }}
+                      </span>
+                    </div>
                   </div>
                   <div class="trophy-container">
-                    <i 
-                      class="fas fa-trophy trophy-icon" 
+                    <i
+                      class="fas fa-trophy trophy-icon"
                       :class="leaderboardService.getTrophyClass(player.rank)"
                     ></i>
                   </div>
                 </div>
-                <div class="text-center mt-4">
+                <div class="points-section">
                   <div class="fw-bold text-muted mb-1">Points</div>
-                  <div class="fs-4">{{ leaderboardService.formatPoints(player.points) }}</div>
+                  <div class="points-value-display">{{ leaderboardService.formatPoints(player.points) }}</div>
                 </div>
               </div>
             </div>
@@ -107,7 +109,7 @@
               <div class="col-1 col-sm-1"></div>
               <div class="col-4 col-sm-3">Player Name</div>
               <div class="col-3">Points</div>
-              <div class="col-3">Rank</div>
+              <div class="col-3">Tier</div>
             </div>
           </div>
 
@@ -417,22 +419,105 @@ export default {
   border-radius: 8px;
   margin-bottom: 1rem;
   padding: 1rem;
-  transition: transform 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.player-card:hover {
+.player-card:not(.top-player-card):hover {
   transform: translateX(5px);
   background-color: #f8f9fa;
 }
 
 .top-player-card {
   padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.top-player-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.top-player-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 1rem;
+}
+
+.player-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.top-player-card .profile-pic {
+  width: 90px;
+  height: 90px;
+  border: 4px solid rgba(255,255,255,0.8);
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  margin-bottom: 0.5rem;
+}
+
+.player-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: center;
+  width: 100%;
+  text-align: center;
+}
+
+.player-name {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.points-section {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #eee;
+}
+
+.points-value-display {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #333;
 }
 
 .current-user-card {
   background-color: #ffe6e6;
   border: 2px solid #FF6B6B !important;
+}
+
+.rank-1 {
+  border: 2px solid #ffd700;
+  background: linear-gradient(to bottom right, #ffffff, #fff9e6);
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.2);
+}
+
+.rank-2 {
+  border: 2px solid #c0c0c0;
+  background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
+  box-shadow: 0 4px 15px rgba(192, 192, 192, 0.2);
+}
+
+.rank-3 {
+  border: 2px solid #cd7f32;
+  background: linear-gradient(to bottom right, #ffffff, #fff5e6);
+  box-shadow: 0 4px 15px rgba(205, 127, 50, 0.2);
 }
 
 .profile-pic {
@@ -465,16 +550,18 @@ export default {
 .rank-newbie { background-color: #6c3702; color: white; }
 
 .trophy-container {
+  position: absolute;
+  top: 15px;
+  right: 15px;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
 }
 
 .trophy-icon {
   color: #ffd700;
-  font-size: 55px;
-  margin-right: 20px;
-  margin-top: 20px;
+  font-size: 2.5rem;
 }
 
 .silver-trophy { color: #c0c0c0; }
@@ -541,9 +628,7 @@ export default {
   }
 
   .trophy-icon {
-    font-size: 40px !important;
-    margin-right: 10px !important;
-    margin-top: 10px !important;
+    font-size: 2rem;
   }
 
   .table-header .row,

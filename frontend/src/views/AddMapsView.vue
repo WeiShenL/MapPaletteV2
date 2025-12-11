@@ -330,6 +330,24 @@ export default {
         // Dynamically load Google Maps script with marker library for Advanced Markers
         // Using loading=async parameter as per Google's latest requirements
         return new Promise((resolve, reject) => {
+          if (window.google && window.google.maps) {
+            initMap()
+            resolve()
+            return
+          }
+
+          const existingScript = document.querySelector('script[src*="maps.googleapis.com/maps/api/js"]')
+          if (existingScript) {
+            const checkGoogle = setInterval(() => {
+              if (window.google && window.google.maps) {
+                clearInterval(checkGoogle)
+                initMap()
+                resolve()
+              }
+            }, 100)
+            return
+          }
+
           const script = document.createElement('script')
           script.src = `https://maps.googleapis.com/maps/api/js?key=${mapsApiKey.value}&callback=initMap&libraries=places,marker&loading=async`
           script.async = true
@@ -347,6 +365,9 @@ export default {
     // Initialize Google Maps
     const initMap = async () => {
       const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || 'DEMO_MAP_ID'
+
+      // Import libraries
+      const { Autocomplete } = await google.maps.importLibrary("places")
 
       map.value = new google.maps.Map(document.getElementById("map"), {
         mapId: mapId, // Required for Advanced Markers API (google.maps.Marker deprecated Feb 2024)
@@ -390,7 +411,7 @@ export default {
 
       // Initialize autocomplete (replaces deprecated SearchBox)
       const input = document.getElementById("pac-input")
-      const autocomplete = new google.maps.places.Autocomplete(input)
+      const autocomplete = new Autocomplete(input)
 
       // Bind autocomplete to map bounds to bias search results to viewport
       autocomplete.bindTo("bounds", map.value)
@@ -1033,6 +1054,16 @@ export default {
             deleteCountdown.value--
             if (deleteCountdown.value === 0) {
               clearInterval(deleteTimeout.value)
+              // Close modal and cleanup before navigating
+              const modal = window.bootstrap.Modal.getInstance(document.getElementById('deletePost'))
+              if (modal) {
+                modal.hide()
+              }
+              // Clean up any leftover modal backdrops
+              document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove())
+              document.body.classList.remove('modal-open')
+              document.body.style.removeProperty('overflow')
+              document.body.style.removeProperty('padding-right')
               router.push('/homepage')
             }
           }, 1000)
