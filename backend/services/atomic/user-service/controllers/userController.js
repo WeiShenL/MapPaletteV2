@@ -436,7 +436,9 @@ const updateUserPoints = async (req, res) => {
     });
 
     await cache.del(`user:${userID}`);
-    await cache.del('leaderboard:*'); // Invalidate leaderboard cache
+    await cache.delPattern('leaderboard:*'); // Invalidate leaderboard cache
+
+    console.log(`[UPDATE_POINTS] Updated points for user ${userID}: ${pointsToAdd > 0 ? '+' : ''}${pointsToAdd}`);
 
     return res.json({ message: 'Points updated', user });
   } catch (error) {

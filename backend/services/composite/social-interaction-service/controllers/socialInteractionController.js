@@ -146,31 +146,36 @@ exports.sharePost = async (req, res) => {
       { headers: getServiceHeaders() }
     );
 
-    // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
-    const post = postResponse.data;
+    const { isNewShare, interactionId } = interactionResponse.data;
 
-    // Step 3: Award points to content creator
-    if (post.userId && post.userId !== userId) {
-      await updateUserPoints(post.userId, 2);
+    // Only update count and award points for new shares
+    if (isNewShare) {
+      // Step 2: Get post details to find creator
+      const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
+      const post = postResponse.data;
+
+      // Step 3: Award points to content creator (if not sharing own post)
+      if (post.userId && post.userId !== userId) {
+        await updateUserPoints(post.userId, 2);
+      }
+
+      // Step 4: Update post share count
+      await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
+        field: 'shareCount',
+        increment: 1
+      }, { headers: getServiceHeaders() });
+
+      console.log(`[SHARE] Successfully shared post ${postId} by user ${userId} (new share)`);
+    } else {
+      console.log(`[SHARE] User ${userId} already shared post ${postId} (no count increment)`);
     }
 
-    // Step 4: Update post share count
-    await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
-      field: 'shareCount',
-      increment: 1
-    }, { headers: getServiceHeaders() });
-
-    console.log(`[SHARE] Successfully shared post ${postId} by user ${userId}`);
     return res.status(200).json({
-      message: 'Post shared successfully!',
-      interactionId: interactionResponse.data.interactionId
+      message: isNewShare ? 'Post shared successfully!' : 'Post already shared',
+      interactionId,
+      isNewShare
     });
   } catch (error) {
-    if (error.response?.status === 400) {
-      console.log(`[SHARE] User ${userId} already shared post ${postId}`);
-      return res.status(400).json({ message: error.response.data.message });
-    }
     console.error(`[SHARE] Error sharing post ${postId} by user ${userId}:`, error.message);
     return res.status(500).json({ message: 'Failed to share post' });
   }
@@ -190,23 +195,33 @@ exports.addComment = async (req, res) => {
   console.log(`[COMMENT] User ${userId} adding comment to post ${postId}`);
 
   try {
-    // Step 1: Add comment via interaction service
+    // Step 1: Get post details to find creator and current comment count
+    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
+    const post = postResponse.data;
+
+    // Step 2: Check if this is the first comment (before adding the new one)
+    const isFirstComment = (post.commentCount || 0) === 0;
+
+    // Step 3: Add comment via interaction service
     const interactionResponse = await axios.post(
       `${INTERACTION_SERVICE_URL}/comment/post/${postId}`,
       { userId, content, username },
       { headers: getServiceHeaders() }
     );
 
-    // Step 2: Get post details to find creator
-    const postResponse = await axios.get(`${POST_SERVICE_URL}/posts?postId=${postId}`);
-    const post = postResponse.data;
-
-    // Step 3: Award points to content creator (if not commenting on own post)
+    // Step 4: Award points (only if not commenting on own post)
     if (post.userId && post.userId !== userId) {
+      // Post creator gets +1 point for engagement
       await updateUserPoints(post.userId, 1);
+      
+      // First commenter gets +3 bonus points
+      if (isFirstComment) {
+        await updateUserPoints(userId, 3);
+        console.log(`[COMMENT] First comment bonus: +3 points to user ${userId}`);
+      }
     }
 
-    // Step 4: Update post comment count
+    // Step 5: Update post comment count
     await axios.patch(`${POST_SERVICE_URL}/${postId}/count`, {
       field: 'commentCount',
       increment: 1
@@ -218,7 +233,8 @@ exports.addComment = async (req, res) => {
     return res.status(201).json({
       message: 'Comment added successfully!',
       commentId: commentData?.id,
-      comment: commentData
+      comment: commentData,
+      isFirstComment
     });
   } catch (error) {
     console.error(`[COMMENT] Error adding comment to post ${postId} by user ${userId}:`, error.message);
@@ -346,13 +362,13 @@ exports.followUser = async (req, res) => {
       await axios.patch(`${USER_SERVICE_URL}/${targetUserId}/count`, {
         field: 'numFollowers',
         increment: 1
-      });
+      }, { headers: getServiceHeaders() });
 
       // Update following count for current user
       await axios.patch(`${USER_SERVICE_URL}/${userId}/count`, {
         field: 'numFollowing',
         increment: 1
-      });
+      }, { headers: getServiceHeaders() });
 
       results.countsUpdated = true;
 
@@ -414,13 +430,13 @@ exports.unfollowUser = async (req, res) => {
       await axios.patch(`${USER_SERVICE_URL}/${targetUserId}/count`, {
         field: 'numFollowers',
         increment: -1
-      });
+      }, { headers: getServiceHeaders() });
 
       // Update following count for current user
       await axios.patch(`${USER_SERVICE_URL}/${userId}/count`, {
         field: 'numFollowing',
         increment: -1
-      });
+      }, { headers: getServiceHeaders() });
 
       results.countsUpdated = true;
 

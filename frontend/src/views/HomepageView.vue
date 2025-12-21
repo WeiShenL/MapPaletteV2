@@ -197,7 +197,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useInfiniteQuery } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQueryClient } from '@tanstack/vue-query'
 import axios from 'axios'
 import NavBar from '@/components/layout/NavBar.vue'
 import SiteFooter from '@/components/layout/SiteFooter.vue'
@@ -227,6 +227,7 @@ export default {
   setup() {
     // Composables
     const { showAlert, alertType, alertMessage, setAlert } = useAlert()
+    const queryClient = useQueryClient()
 
     // State
     const currentUser = ref(null)
@@ -278,24 +279,39 @@ export default {
 
     // Store optimistic updates in a reactive object for proper reactivity
     const likeStates = ref({})
+    const shareStates = ref({})
 
     const activities = computed(() => {
         if (!feedData.value?.pages) return []
         const normalized = feedData.value.pages.flatMap(page => normalizePosts(page.posts))
 
-        // Merge with cached optimistic like states
+        // Merge with cached optimistic like and share states
         return normalized.map(activity => {
-            const cached = likeStates.value[activity.id]
-            if (cached !== undefined) {
-                // Apply cached optimistic state
-                return {
-                    ...activity,
-                    isLiked: cached.isLiked,
-                    likeCount: cached.likeCount,
-                    likes: cached.likeCount
+            const cachedLike = likeStates.value[activity.id]
+            const cachedShare = shareStates.value[activity.id]
+            
+            let result = activity
+            
+            if (cachedLike !== undefined) {
+                // Apply cached optimistic like state
+                result = {
+                    ...result,
+                    isLiked: cachedLike.isLiked,
+                    likeCount: cachedLike.likeCount,
+                    likes: cachedLike.likeCount
                 }
             }
-            return activity
+            
+            if (cachedShare !== undefined) {
+                // Apply cached optimistic share state
+                result = {
+                    ...result,
+                    shareCount: cachedShare.shareCount,
+                    shares: cachedShare.shareCount
+                }
+            }
+            
+            return result
         })
     })
     
@@ -313,17 +329,52 @@ export default {
       }
     }
     
-    const handleActivityShare = async (activity) => {
-      try {
-        const userId = currentUser.value?.id || window.currentUser?.id
-        if (!userId) {
-          setAlert('error', 'Please refresh the page and try again')
-          return
+    const handleActivityShare = async (shareData) => {
+      // Handle both formats: direct activity object or { post, apiHandled } from modal
+      const activity = shareData.post || shareData
+      const apiHandled = shareData.apiHandled || false
+      const activityId = activity.id
+      
+      // Helper to update share state reactively
+      const updateShareState = (newShareCount) => {
+        shareStates.value = {
+          ...shareStates.value,
+          [activityId]: { shareCount: newShareCount }
         }
-        await socialInteractionService.sharePost(activity.id, userId)
-        activity.shares = (activity.shares || 0) + 1
-      } catch (error) {
-        setAlert('error', 'Failed to share post')
+        // Also update selectedActivity if it's the same post (for modal)
+        if (selectedActivity.value && selectedActivity.value.id === activityId) {
+          selectedActivity.value = {
+            ...selectedActivity.value,
+            shareCount: newShareCount,
+            shares: newShareCount
+          }
+        }
+      }
+      
+      // Get current share count (from cached state or activity)
+      const currentShareCount = shareStates.value[activityId]?.shareCount ?? 
+                                activity.shareCount ?? activity.shares ?? 0
+      
+      // If API was already handled (from PostDetailModal), just sync the count
+      if (apiHandled) {
+        updateShareState(currentShareCount + 1)
+        return
+      }
+      
+      // Call backend API to record the share
+      const userId = currentUser.value?.id || window.currentUser?.id
+      if (userId && activityId) {
+        try {
+          const response = await socialInteractionService.sharePost(activityId, userId)
+          
+          // Only update share count for NEW shares (first time user shares this post)
+          if (response.isNewShare) {
+            updateShareState(currentShareCount + 1)
+          }
+        } catch (err) {
+          console.error('[HomepageView] Failed to record share:', err)
+          // Don't show error to user since clipboard copy was successful
+        }
       }
     }
     
@@ -400,9 +451,50 @@ export default {
     }
     
     onMounted(() => {
+      // Check if we're returning from post creation and need to refresh the feed
+      const postCreatedFlag = sessionStorage.getItem('postCreated')
+      if (postCreatedFlag) {
+        sessionStorage.removeItem('postCreated')
+        // Invalidate the feed cache to force a refresh
+        queryClient.invalidateQueries({ queryKey: ['userFeed'] })
+      }
+
       const initializeApp = () => {
         // App is initialized
       }
+
+      // Listen for profile picture updates from settings
+      const handleProfilePictureUpdated = (event) => {
+        if (event.detail?.url) {
+          userProfile.value.avatar = event.detail.url
+        }
+      }
+
+      // Listen for post created events to refresh the feed
+      const handlePostCreated = () => {
+        // Invalidate the feed cache to force a refresh
+        queryClient.invalidateQueries({ queryKey: ['userFeed'] })
+      }
+
+      const handleUserLoaded = () => {
+        if (window.currentUser) {
+          currentUser.value = window.currentUser
+          currentUserId.value = window.currentUser.id
+          updateUserProfile(window.currentUser)
+          initializeApp()
+        }
+      }
+
+      // Always register these event listeners
+      window.addEventListener('userLoaded', handleUserLoaded)
+      window.addEventListener('profilePictureUpdated', handleProfilePictureUpdated)
+      window.addEventListener('postCreated', handlePostCreated)
+
+      onUnmounted(() => {
+        window.removeEventListener('userLoaded', handleUserLoaded)
+        window.removeEventListener('profilePictureUpdated', handleProfilePictureUpdated)
+        window.removeEventListener('postCreated', handlePostCreated)
+      })
 
       if (window.currentUser) {
         currentUser.value = window.currentUser
@@ -422,29 +514,6 @@ export default {
             console.error('Error parsing cached user data:', e)
           }
         }
-        const handleUserLoaded = () => {
-          if (window.currentUser) {
-            currentUser.value = window.currentUser
-            currentUserId.value = window.currentUser.id
-            updateUserProfile(window.currentUser)
-            initializeApp()
-          }
-        }
-        
-        // Listen for profile picture updates from settings
-        const handleProfilePictureUpdated = (event) => {
-          if (event.detail?.url) {
-            userProfile.value.avatar = event.detail.url
-          }
-        }
-        
-        window.addEventListener('userLoaded', handleUserLoaded)
-        window.addEventListener('profilePictureUpdated', handleProfilePictureUpdated)
-        
-        onUnmounted(() => {
-          window.removeEventListener('userLoaded', handleUserLoaded)
-          window.removeEventListener('profilePictureUpdated', handleProfilePictureUpdated)
-        })
       }
     })
     

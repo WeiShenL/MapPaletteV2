@@ -430,9 +430,24 @@ const handleUse = () => {
 }
 
 // Handle share
-const handleShare = ({ success }) => {
+const handleShare = async ({ success }) => {
   if (success) {
     setAlert('success', 'Link copied to clipboard!')
+    
+    // Call backend API to record the share
+    if (currentUser.value && post.value) {
+      try {
+        const response = await socialInteractionService.sharePost(post.value.id, currentUser.value.id)
+        
+        // Only update share count for NEW shares (first time user shares this post)
+        if (response.isNewShare) {
+          post.value.shareCount = (post.value.shareCount || 0) + 1
+        }
+      } catch (err) {
+        console.error('[PostView] Failed to record share:', err)
+        // Don't show error to user since clipboard copy was successful
+      }
+    }
   } else {
     setAlert('error', 'Failed to copy link to clipboard')
   }

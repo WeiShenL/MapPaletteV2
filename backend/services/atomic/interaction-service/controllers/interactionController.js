@@ -105,17 +105,31 @@ const shareEntity = async (req, res) => {
   console.log(`[SHARE] User ${userId} sharing ${entityType} ${entityId}`);
 
   try {
+    // Check if user already shared this post
+    const existingShare = await db.share.findUnique({
+      where: {
+        userId_postId: {
+          userId,
+          postId: entityId
+        }
+      }
+    });
+
+    if (existingShare) {
+      console.log(`[SHARE] User ${userId} already shared ${entityType} ${entityId}`);
+      return res.json({
+        message: 'Post already shared',
+        interactionId: existingShare.id,
+        isNewShare: false
+      });
+    }
+
+    // Create new share record
     const share = await db.share.create({
       data: {
         userId,
         postId: entityId,
       }
-    });
-
-    // Update post share count
-    await db.post.update({
-      where: { id: entityId },
-      data: { shareCount: { increment: 1 } }
     });
 
     // Invalidate caches
@@ -124,12 +138,10 @@ const shareEntity = async (req, res) => {
     console.log(`[SHARE] Successfully created share: ${share.id}`);
     return res.json({
       message: 'Entity shared successfully!',
-      interactionId: share.id
+      interactionId: share.id,
+      isNewShare: true
     });
   } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(400).json({ message: 'User has already shared this entity' });
-    }
     console.error(`[SHARE] Error:`, error);
     return res.status(500).json({ message: 'Error creating share', error: error.message });
   }
@@ -164,15 +176,12 @@ const createComment = async (req, res) => {
       }
     });
 
-    // Update post comment count
-    await db.post.update({
-      where: { id: entityId },
-      data: { commentCount: { increment: 1 } }
-    });
+    // Note: commentCount is updated by social-interaction-service (composite layer)
+    // to avoid double-counting
 
     // Invalidate caches
     await cache.del(`post:${entityId}`);
-    await cache.del(`comments:${entityId}`);
+    await cache.delPattern(`comments:${entityId}:*`);
 
     console.log(`[COMMENT] Successfully created comment: ${comment.id}`);
     return res.json({
@@ -254,11 +263,8 @@ const deleteComment = async (req, res) => {
       where: { id: commentId }
     });
 
-    // Update post comment count
-    await db.post.update({
-      where: { id: entityId },
-      data: { commentCount: { decrement: 1 } }
-    });
+    // Note: commentCount is updated by social-interaction-service (composite layer)
+    // to avoid double-counting
 
     // Invalidate caches
     await cache.del(`post:${entityId}`);

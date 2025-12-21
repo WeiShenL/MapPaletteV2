@@ -269,6 +269,7 @@ import { Modal } from 'bootstrap'
 import { formatRelativeTime } from '@/utils/dateFormatter'
 import { normalizePost } from '@/utils/postNormalizer'
 import { useComments } from '@/composables/useComments'
+import socialInteractionService from '@/services/socialInteractionService'
 import PostActions from './PostActions.vue'
 import ConfirmModal from './ConfirmModal.vue'
 
@@ -401,10 +402,28 @@ const handleUse = (post) => {
 /**
  * Handle share completion
  */
-const handleShareComplete = ({ post, success, url, error }) => {
+const handleShareComplete = async ({ post: sharedPost, success, url, error }) => {
   if (success) {
-    emit('share', post)
     emit('alert', 'success', 'Link copied to clipboard!')
+    
+    // Call backend API to record the share
+    if (props.currentUser) {
+      try {
+        const response = await socialInteractionService.sharePost(sharedPost.id, props.currentUser.id)
+        
+        // Only update share count for NEW shares (first time user shares this post)
+        if (response.isNewShare) {
+          if (reactivePost.value) {
+            reactivePost.value.shareCount = (reactivePost.value.shareCount || 0) + 1
+          }
+          // Emit with apiHandled flag so parent doesn't call API again
+          emit('share', { post: sharedPost, apiHandled: true })
+        }
+      } catch (err) {
+        console.error('[PostDetailModal] Failed to record share:', err)
+        // Don't show error to user since clipboard copy was successful
+      }
+    }
   } else {
     emit('alert', 'error', 'Failed to copy link to clipboard')
   }

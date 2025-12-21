@@ -152,7 +152,7 @@ const createGlobalMapLimiter = () => {
 
 /**
  * IP-based rate limiter (backup in case user ID is missing)
- * 60 map generations per hour per IP
+ * 200 map generations per hour per IP
  */
 const createIPMapLimiter = () => {
   const redisClient = createRedisClient();
@@ -163,7 +163,7 @@ const createIPMapLimiter = () => {
       prefix: 'rl:map:ip:',
     }),
     windowMs: 60 * 60 * 1000, // 1 hour
-    max: 60, // 60 map generations per hour per IP (~1 per minute)
+    max: 200, // 200 map generations per hour per IP
     message: {
       success: false,
       error: {

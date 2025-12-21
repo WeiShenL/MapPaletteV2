@@ -400,7 +400,7 @@ export default {
           console.log('Attempting to upload profile picture...')
           const formDataImg = new FormData()
           formDataImg.append('profilePicture', profileFile.value)
-          
+
           try {
             const uploadResponse = await axios.post(`/api/users/upload-profile-picture/${user.id}`, formDataImg, {
               headers: {
@@ -409,12 +409,22 @@ export default {
               timeout: 30000 // 30 second timeout for upload
             })
             console.log('Profile picture uploaded:', uploadResponse.data)
+
+            // Update global state with new profile picture URL
+            const newProfileUrl = uploadResponse.data.profilePicture || uploadResponse.data.url
+            if (newProfileUrl && window.currentUser) {
+              window.currentUser.profilePicture = newProfileUrl
+              window.currentUser.avatar = newProfileUrl
+              localStorage.setItem('currentUser', JSON.stringify(window.currentUser))
+              // Dispatch event to notify other components
+              window.dispatchEvent(new CustomEvent('profilePictureUpdated', { detail: { url: newProfileUrl } }))
+            }
           } catch (uploadError) {
             console.error('Profile picture upload failed:', uploadError.response?.data || uploadError.message)
             // Don't block signup success if profile picture upload fails
           }
         } else {
-          console.log('Skipping profile picture upload:', { 
+          console.log('Skipping profile picture upload:', {
             reason: !profileFile.value ? 'No file selected' : 'Login failed',
             profileFileValue: profileFile.value
           })
@@ -423,7 +433,7 @@ export default {
         // Show success message
         displaySuccessMessage('Account created successfully! Redirecting to homepage...')
         isSubmitting.value = false
-        
+
         // Redirect after 2 seconds
         setTimeout(() => {
           router.push('/homepage')

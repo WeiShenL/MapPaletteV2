@@ -476,8 +476,13 @@ const updateInteractionCount = async (req, res) => {
       data: updateData
     });
 
-    // Invalidate cache
+    // Invalidate all related caches
     await cache.del(`post:${postID}`);
+    await cache.delPattern(`feed:*`);
+    await cache.delPattern(`trending:*`);
+    await cache.delPattern(`posts:user:${post.userId}:*`);
+
+    console.log(`[UPDATE_COUNT] Invalidated caches for post ${postID}`);
 
     return res.json({ message: 'Counts updated', post });
   } catch (error) {

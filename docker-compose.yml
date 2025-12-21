@@ -436,6 +436,8 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@supabase-db:5432/${POSTGRES_DB}
       - REDIS_URL=redis://redis:6379
+      - USER_SERVICE_URL=http://user-service:5000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
     networks:
       - mappalette-network
     volumes:
@@ -602,6 +604,7 @@ services:
       - POST_SERVICE_URL=http://post-service:5000
       - INTERACTION_SERVICE_URL=http://interaction-service:5000
       - FOLLOW_SERVICE_URL=http://follow-service:5000
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY}
     networks:
       - mappalette-network
     volumes:

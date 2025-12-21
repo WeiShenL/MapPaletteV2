@@ -76,6 +76,7 @@ export const useComments = (postId) => {
    * @returns {Promise<void>}
    */
   const loadComments = async (userId = null) => {
+    console.log('[useComments] loadComments called with postId:', postId, 'userId:', userId)
     if (!postId) {
       console.warn('Cannot load comments: postId is required')
       return
@@ -85,16 +86,21 @@ export const useComments = (postId) => {
     error.value = null
 
     try {
+      console.log('[useComments] Calling getPostInteractions...')
       const response = await socialInteractionService.getPostInteractions(postId, userId)
+      console.log('[useComments] Full API response:', JSON.stringify(response, null, 2))
 
       // Extract and normalize comments
       let rawComments = response.comments || []
-      
+      console.log('[useComments] response.comments:', rawComments)
+
       // Handle case where response.comments is an object with a comments array (pagination wrapper)
       if (rawComments && !Array.isArray(rawComments) && Array.isArray(rawComments.comments)) {
         console.log('[useComments] Detected paginated comments response, extracting array')
         rawComments = rawComments.comments
       }
+
+      console.log('[useComments] Final rawComments count:', rawComments.length)
 
       // Debug: Log raw comment structure before normalization
       if (rawComments.length > 0) {
@@ -103,6 +109,7 @@ export const useComments = (postId) => {
       }
 
       comments.value = normalizeComments(rawComments)
+      console.log('[useComments] After normalization, comments.value.length:', comments.value.length)
 
       // Debug: Log normalized comment structure
       if (comments.value.length > 0) {
@@ -117,7 +124,7 @@ export const useComments = (postId) => {
       })
 
     } catch (err) {
-      console.error('Error loading comments:', err)
+      console.error('[useComments] Error loading comments:', err)
       error.value = err.message || 'Failed to load comments'
       comments.value = []
     } finally {

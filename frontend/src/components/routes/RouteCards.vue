@@ -164,7 +164,8 @@ const handleShareResult = (route, { success }) => {
 }
 
 .post > header .title {
-    flex-grow: 1;
+    flex: 1 1 0;
+    min-width: 0;
     padding-right: 1.5em;
 }
 
@@ -192,7 +193,8 @@ const handleShareResult = (route, { success }) => {
 }
 
 .post > header .meta {
-    min-width: auto;
+    flex: 0 0 auto;
+    max-width: 160px;
     text-align: right;
     padding-left: 1.5em;
     border-left: solid 1px #e9ecef;
@@ -287,26 +289,6 @@ const handleShareResult = (route, { success }) => {
 
 /* Responsive */
 @media (max-width: 991px) {
-    .post > header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .post > header .title {
-        padding-right: 0;
-        margin-bottom: 1rem;
-    }
-
-    .post > header .meta {
-        padding-left: 0;
-        border-left: none;
-        border-top: solid 1px #e9ecef;
-        padding-top: 1rem;
-        width: 100%;
-        flex-direction: row;
-        justify-content: flex-end;
-    }
-
     .post .image.featured img {
         height: 200px;
     }

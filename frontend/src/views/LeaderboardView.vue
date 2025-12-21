@@ -42,11 +42,11 @@
         
         <!-- Top 3 Players Section -->
         <div class="top-players-section" v-if="topPlayers.length > 0">
-          <div class="row justify-content-center mb-5">
+          <div class="top-players-grid">
             <div
               v-for="(player, index) in topPlayers"
               :key="player.userId"
-              class="col-12 col-sm-6 col-lg-4 mb-4"
+              class="top-player-wrapper"
             >
               <div
                 class="player-card top-player-card h-100"
@@ -121,11 +121,11 @@
           >
             <div class="row align-items-center">
               <div class="col-1 col-sm-2">{{ player.rank }}</div>
-              <div class="col-1 col-sm-1">
-                <img 
-                  :src="player.profilePicture || '/resources/images/default-profile.png'" 
-                  :alt="player.username" 
-                  class="profile-pic" 
+              <div class="col-1 col-sm-1 profile-pic-cell">
+                <img
+                  :src="player.profilePicture || '/resources/images/default-profile.png'"
+                  :alt="player.username"
+                  class="profile-pic"
                   @click="goToProfile(player.userId)"
                 >
               </div>
@@ -428,11 +428,25 @@ export default {
   background-color: #f8f9fa;
 }
 
+.top-players-grid {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.top-player-wrapper {
+  flex: 1;
+  max-width: 320px;
+  min-width: 200px;
+}
+
 .top-player-card {
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   position: relative;
+  height: 100%;
 }
 
 .top-player-card:hover {
@@ -462,6 +476,9 @@ export default {
   border: 4px solid rgba(255,255,255,0.8);
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   margin-bottom: 0.5rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .player-details {
@@ -471,6 +488,7 @@ export default {
   align-items: center;
   width: 100%;
   text-align: center;
+  padding: 0 50px;
 }
 
 .player-name {
@@ -551,8 +569,9 @@ export default {
 
 .trophy-container {
   position: absolute;
-  top: 15px;
+  top: 50%;
   right: 15px;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -562,6 +581,12 @@ export default {
 .trophy-icon {
   color: #ffd700;
   font-size: 2.5rem;
+}
+
+.profile-pic-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .silver-trophy { color: #c0c0c0; }
@@ -596,11 +621,24 @@ export default {
 }
 
 /* Responsive Design */
+@media (max-width: 768px) {
+  .top-players-grid {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .top-player-wrapper {
+    width: 100%;
+    max-width: 100%;
+    min-width: auto;
+  }
+}
+
 @media (max-width: 576px) {
   .page-title {
     font-size: 2rem;
   }
-  
+
   .points-info {
     width: 24px;
     height: 24px;
@@ -641,6 +679,12 @@ export default {
 
   .player-card .row > div {
     min-width: 0;
+  }
+
+  .profile-pic-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .player-card .row div:nth-child(3) {

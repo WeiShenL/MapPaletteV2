@@ -929,17 +929,21 @@ export default {
           bootstrapModal.hide()
         }
       })
-      
+
       // Remove modal backdrop if it exists
       const backdrop = document.querySelector('.modal-backdrop')
       if (backdrop) {
         backdrop.remove()
       }
-      
+
       // Remove modal-open class from body
       document.body.classList.remove('modal-open')
       document.body.style.removeProperty('padding-right')
-      
+
+      // Set flag in sessionStorage to signal homepage to refresh feed
+      // This is more reliable than events since it persists across navigation
+      sessionStorage.setItem('postCreated', 'true')
+
       // Navigate after a small delay to ensure modal cleanup
       setTimeout(() => {
         router.push('/homepage')

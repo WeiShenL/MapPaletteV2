@@ -89,11 +89,17 @@ const createRateLimiter = (options = {}) => {
 /**
  * Strict rate limiter for sensitive endpoints (delete operations)
  * 60 requests per 15 minutes (~4 per minute)
+ * Skips internal service-to-service calls (identified by x-service-key header)
  */
 const strictLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 60,
   message: 'Too many delete requests. Please slow down.',
+  skip: (req) => {
+    // Skip rate limiting for internal service-to-service calls
+    const serviceKey = req.headers['x-service-key'];
+    return serviceKey === process.env.INTERNAL_SERVICE_KEY;
+  },
 });
 
 /**
