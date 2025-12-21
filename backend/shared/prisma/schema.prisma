@@ -12,8 +12,13 @@ model User {
   email           String    @unique
   username        String    @unique
   profilePicture  String    @default("/resources/images/default-profile.png")
+  coverPhoto      String?   // Optional cover photo URL
+  bio             String?   // Optional bio/tagline
+  location        String?   // Optional location (e.g., "Singapore")
   birthday        String?   // Optional - can be NULL if not provided during signup
   gender          String?   // Optional - can be NULL if not provided during signup
+  showBirthday    Boolean   @default(true)  // Whether to show birthday on profile
+  showLocation    Boolean   @default(true)  // Whether to show location on profile
   isProfilePrivate Boolean  @default(false)
   isPostPrivate   Boolean   @default(false)
   numFollowers    Int       @default(0)

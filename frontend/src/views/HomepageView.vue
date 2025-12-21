@@ -70,20 +70,6 @@
                                   Browse Routes
                               </router-link>
                           </div>
-                  
-                          <!-- Navigation Menu -->
-                          <div class="mb-4">
-                              <h6 class="mb-3 text-uppercase fw-bold text-muted small">Menu</h6>
-                              <div class="list-group list-group-flush">
-                                  <router-link v-for="item in menuItems" 
-                                  :key="item.id" 
-                                  :to="item.route" 
-                                  class="list-group-item list-group-item-action d-flex align-items-center">
-                                      <i :class="item.icon + ' me-3'"></i>
-                                      {{ item.text }}
-                                  </router-link>
-                              </div>
-                          </div>
 
                           <!-- Suggested Followers -->
                           <div v-if="shouldShowSuggestions || (userProfile.stats.following > 0 && suggestedUsersLoaded)" class="mb-4">
@@ -248,10 +234,35 @@ export default {
     
     // Hero stats
     const heroStats = ref([
-      { id: 1, icon: 'bi bi-people-fill', text: '2.5k Active Runners' },
-      { id: 2, icon: 'bi bi-map-fill', text: '500+ Shared Routes' },
+      { id: 1, icon: 'bi bi-people-fill', text: '-- Active Runners' },
+      { id: 2, icon: 'bi bi-map-fill', text: '-- Shared Routes' },
       { id: 3, icon: 'bi bi-trophy-fill', text: 'Daily Achievements' }
     ])
+
+    // Fetch platform stats for hero section
+    const fetchPlatformStats = async () => {
+      try {
+        const response = await axios.get('/api/users/stats/platform')
+        const stats = response.data
+        
+        // Format numbers nicely (e.g., 1500 -> 1.5k)
+        const formatNumber = (num) => {
+          if (num >= 1000) {
+            return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+          }
+          return num.toString()
+        }
+        
+        heroStats.value = [
+          { id: 1, icon: 'bi bi-people-fill', text: `${formatNumber(stats.activeRunners)} Active Runners` },
+          { id: 2, icon: 'bi bi-map-fill', text: `${formatNumber(stats.totalRoutes)}+ Shared Routes` },
+          { id: 3, icon: 'bi bi-trophy-fill', text: 'Daily Achievements' }
+        ]
+      } catch (error) {
+        console.error('Error fetching platform stats:', error)
+        // Keep default values on error
+      }
+    }
 
     // Infinite Scroll with Vue Query
     const fetchUserFeed = async ({ pageParam = 0, signal }) => {
@@ -451,6 +462,9 @@ export default {
     }
     
     onMounted(() => {
+      // Fetch platform stats for hero section
+      fetchPlatformStats()
+      
       // Check if we're returning from post creation and need to refresh the feed
       const postCreatedFlag = sessionStorage.getItem('postCreated')
       if (postCreatedFlag) {

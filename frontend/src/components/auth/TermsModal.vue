@@ -38,9 +38,6 @@
 
           <strong>9. Termination</strong><br>
           We reserve the right to suspend or terminate your account if you violate these Terms or engage in prohibited conduct.<br><br>
-
-          <strong>10. Contact Us</strong><br>
-          For questions about these Terms, please contact us at support@mappalette.com.<br><br>
           </p>
         </div>
         <div class="modal-footer">

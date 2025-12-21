@@ -24,6 +24,7 @@ const upload = multer({
 });
 
 // Public routes - Read operations (lenient rate limit)
+router.get('/stats/platform', lenientLimiter, asyncHandler(userController.getPlatformStats));
 router.get('/getallusers', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
 router.get('/all', lenientLimiter, validate({ query: paginationSchema }), asyncHandler(userController.getAllUsers));
 router.get('/getcondensed/:currentUserID', lenientLimiter, validate({ params: currentUserIDSchema }), asyncHandler(userController.getCondensedUsers));
@@ -75,6 +76,37 @@ router.put(
   verifyOwnership('userID'),
   validate({ params: userIDSchema }),
   asyncHandler(userController.updatePrivacySettings)
+);
+
+// Update profile info (bio, location, birthday, visibility)
+router.put(
+  '/:userID/profile-info',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  asyncHandler(userController.updateProfileInfo)
+);
+
+// Update cover photo URL
+router.put(
+  '/update/coverPhoto/:userID',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  asyncHandler(userController.updateCoverPhoto)
+);
+
+// Upload cover photo
+router.post(
+  '/upload-cover-photo/:userID',
+  moderateLimiter,
+  verifyAuth,
+  verifyOwnership('userID'),
+  validate({ params: userIDSchema }),
+  upload.single('coverPhoto'),
+  asyncHandler(userController.uploadCoverPhoto)
 );
 
 // Internal service routes (require service key) - Strict rate limit

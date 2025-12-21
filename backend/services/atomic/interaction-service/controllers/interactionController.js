@@ -1,5 +1,6 @@
 const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
+const { censorProfanity } = require('/app/shared/utils/profanityFilter');
 
 // Like a post
 const likeEntity = async (req, res) => {
@@ -150,7 +151,10 @@ const shareEntity = async (req, res) => {
 // Create comment
 const createComment = async (req, res) => {
   const { entityType, entityId } = req.params;
-  const { userId, content } = req.body;
+  let { userId, content } = req.body;
+
+  // Censor profanity in comment content
+  content = censorProfanity(content);
 
   if (!userId || !content) {
     return res.status(400).json({ message: 'User ID and content are required' });

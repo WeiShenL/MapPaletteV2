@@ -37,9 +37,6 @@
 
           <strong>7. Changes to This Policy</strong><br>
           We may update this Privacy Policy periodically. We encourage you to review it regularly to stay informed about our practices.<br><br>
-
-          <strong>8. Contact Us</strong><br>
-          For questions or concerns about this Privacy Policy, please reach out to privacy@mappalette.com.<br><br>
           </p>
         </div>
         <div class="modal-footer">

@@ -2,6 +2,7 @@ const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
 const { renderMapFromPost, calculateWaypointsHash } = require('/app/shared/utils/googleMapsRenderer');
 const { uploadRouteImage, uploadOptimizedRouteImage } = require('/app/shared/utils/storageService');
+const { censorProfanity } = require('/app/shared/utils/profanityFilter');
 const axios = require('axios');
 
 // User service URL for points updates
@@ -25,7 +26,11 @@ async function awardPoints(userId, points) {
 // Create a new post
 const createPost = async (req, res) => {
   const { userID } = req.params;
-  const { title, description, waypoints, color, region, distance, imageUrl } = req.body;
+  let { title, description, waypoints, color, region, distance, imageUrl } = req.body;
+
+  // Censor profanity in user-generated content
+  title = censorProfanity(title);
+  description = censorProfanity(description);
 
   if (!userID) {
     return res.status(400).json({ message: 'User ID is required' });
@@ -226,7 +231,11 @@ const getPost = async (req, res) => {
 // Update post
 const updatePost = async (req, res) => {
   const postID = req.query.id || req.query.postId;
-  const { title, description, imageUrl, image, waypoints, color, distance, region } = req.body;
+  let { title, description, imageUrl, image, waypoints, color, distance, region } = req.body;
+
+  // Censor profanity in user-generated content
+  title = censorProfanity(title);
+  description = censorProfanity(description);
 
   if (!postID) {
     return res.status(400).json({ message: 'Post ID is required' });

@@ -38,7 +38,7 @@
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 
 // Define review images
 const ananyaImg = '/resources/images/index/reviews/ananya.jpg'
@@ -300,15 +300,25 @@ export default {
       updateGalleryItems()
       
       // Handle click outside to close expanded items
-      document.addEventListener('click', (e) => {
-        if (!e.target.closest('.gallery-item-container')) {
-          activeIndex.value = null
-          const galleryContainer = document.getElementById('galleryContainer')
-          galleryContainer.classList.remove('item-active')
-          updateGalleryItems()
-        }
-      })
+      document.addEventListener('click', handleClickOutside)
     })
+
+    // Cleanup event listener when component unmounts
+    onUnmounted(() => {
+      document.removeEventListener('click', handleClickOutside)
+    })
+
+    // Click outside handler - check if element exists
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.gallery-item-container')) {
+        activeIndex.value = null
+        const galleryContainer = document.getElementById('galleryContainer')
+        if (galleryContainer) {
+          galleryContainer.classList.remove('item-active')
+        }
+        updateGalleryItems()
+      }
+    }
 
     return {
       images,

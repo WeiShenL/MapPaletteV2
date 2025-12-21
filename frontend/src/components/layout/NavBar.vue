@@ -3,7 +3,7 @@
   <nav v-if="!userProfile" class="navbar navbar-expand-sm navbar-light bg-light">
     <div class="container-fluid">
       <router-link class="navbar-brand" to="/">
-        <img src="/resources/images/mappalettelogo.png" alt="MapPalette Logo">MapPalette
+        <img src="/resources/images/mappalettelogo.png" alt="MapPalette Logo" width="40" height="40" class="navbar-logo">MapPalette
       </router-link>
       <button class="navbar-toggler" 
               type="button" 
@@ -30,7 +30,7 @@
   <nav v-else class="navbar navbar-expand-lg navbar-light bg-light">
     <div class="container-fluid">
       <router-link class="navbar-brand" to="/homepage">
-        <img src="/resources/images/mappalettelogo.png" alt="MapPalette Logo" style="width: 40px; height: 40px">MapPalette
+        <img src="/resources/images/mappalettelogo.png" alt="MapPalette Logo" width="40" height="40" class="navbar-logo">MapPalette
       </router-link>
       <button class="navbar-toggler" 
               type="button" 

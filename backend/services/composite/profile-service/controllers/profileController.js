@@ -140,9 +140,12 @@ exports.getUserProfile = async (req, res) => {
         id: user.id || user.userID,
         username: user.username,
         profilePicture: user.profilePicture,
+        coverPhoto: user.coverPhoto,
         bio: user.bio,
         location: user.location,
         birthday: user.birthday,
+        showBirthday: user.showBirthday ?? true,
+        showLocation: user.showLocation ?? true,
         followersCount: user.numFollowers || 0,
         followingCount: user.numFollowing || 0
       },

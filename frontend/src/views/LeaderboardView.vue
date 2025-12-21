@@ -114,10 +114,11 @@
           </div>
 
           <div 
-            v-for="(player, index) in remainingPlayers" 
+            v-for="(player, index) in displayedPlayers" 
             :key="player.userId"
+            :ref="el => { if (isCurrentUser(player.userId)) currentUserCardRef = el }"
             class="player-card" 
-            :class="{ 'current-user-card': isCurrentUser(player.userId) }"
+            :class="{ 'current-user-card highlighted-user': isCurrentUser(player.userId) }"
           >
             <div class="row align-items-center">
               <div class="col-1 col-sm-2">{{ player.rank }}</div>
@@ -143,12 +144,30 @@
               </div>
             </div>
           </div>
+          
+          <!-- Scroll sentinel for infinite scroll -->
+          <div ref="scrollSentinel" class="scroll-sentinel" v-if="displayedCount < remainingPlayers.length">
+            <div class="loading-more" v-if="isLoadingMore">
+              <i class="fas fa-spinner fa-spin"></i> Loading more players...
+            </div>
+          </div>
         </div>
         </div>
       </div>
       
-      <!-- Back to Top Button -->
-      <BackToTop />
+      <!-- Floating Navigation Buttons -->
+      <div class="floating-nav-buttons">
+        <button 
+          v-if="currentUserRank" 
+          class="btn find-me-floating" 
+          @click="scrollToMyRank"
+          title="Find my position"
+        >
+          <i class="fas fa-crosshairs"></i>
+          <span class="find-me-rank">#{{ currentUserRank }}</span>
+        </button>
+        <BackToTop />
+      </div>
     </div>
   </div>
 </template>
@@ -175,6 +194,10 @@ export default {
     const error = ref(null)
     const leaderboard = ref([])
     const currentUser = ref(null)
+    const displayedCount = ref(10)
+    const isLoadingMore = ref(false)
+    const scrollSentinel = ref(null)
+    const currentUserCardRef = ref(null)
     
     // User profile for navbar
     const userProfile = ref({
@@ -197,6 +220,17 @@ export default {
       return leaderboard.value.slice(3)
     })
 
+    const displayedPlayers = computed(() => {
+      return remainingPlayers.value.slice(0, displayedCount.value)
+    })
+
+    const currentUserRank = computed(() => {
+      if (!currentUser.value) return null
+      const currentId = currentUser.value.id || currentUser.value.uid
+      const player = leaderboard.value.find(p => p.userId === currentId)
+      return player ? player.rank : null
+    })
+
     // Methods
     const fetchLeaderboard = async () => {
       try {
@@ -213,7 +247,9 @@ export default {
     }
 
     const isCurrentUser = (userId) => {
-      return currentUser.value && currentUser.value.uid === userId
+      if (!currentUser.value) return false
+      // Check both 'id' and 'uid' since different parts of the app use different field names
+      return currentUser.value.id === userId || currentUser.value.uid === userId
     }
 
     const goToProfile = (userId) => {
@@ -227,6 +263,84 @@ export default {
           spread: 70,
           origin: { y: 0.6 }
         })
+      }
+    }
+
+    const loadMorePlayers = () => {
+      if (isLoadingMore.value) return
+      if (displayedCount.value >= remainingPlayers.value.length) return
+      
+      isLoadingMore.value = true
+      setTimeout(() => {
+        displayedCount.value += 10
+        isLoadingMore.value = false
+      }, 200)
+    }
+
+    const scrollToMyRank = async () => {
+      if (!currentUser.value || !currentUserRank.value) return
+      
+      const rank = currentUserRank.value
+      
+      // If in top 3, scroll to top
+      if (rank <= 3) {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        return
+      }
+      
+      // Calculate index in remainingPlayers (rank 4 = index 0)
+      const indexInRemaining = rank - 4
+      
+      // Expand displayed count if needed to show the user
+      if (indexInRemaining >= displayedCount.value) {
+        displayedCount.value = indexInRemaining + 5 // Load a few extra
+        // Wait for DOM to update
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      
+      // Scroll to the element
+      if (currentUserCardRef.value) {
+        currentUserCardRef.value.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        })
+        
+        // Add a pulse animation
+        currentUserCardRef.value.classList.add('pulse-highlight')
+        setTimeout(() => {
+          if (currentUserCardRef.value) {
+            currentUserCardRef.value.classList.remove('pulse-highlight')
+          }
+        }, 2000)
+      }
+    }
+
+    const setupInfiniteScroll = () => {
+      const observerOptions = {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1
+      }
+
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !isLoadingMore.value) {
+            loadMorePlayers()
+          }
+        })
+      }, observerOptions)
+
+      // Watch for sentinel element
+      const watchSentinel = () => {
+        if (scrollSentinel.value) {
+          observer.observe(scrollSentinel.value)
+        }
+      }
+
+      setTimeout(watchSentinel, 100)
+
+      return () => {
+        observer.disconnect()
       }
     }
 
@@ -262,6 +376,10 @@ export default {
     onMounted(async () => {
       loadCurrentUser()
       await fetchLeaderboard()
+      // Setup infinite scroll after data is loaded
+      setTimeout(() => {
+        setupInfiniteScroll()
+      }, 300)
     })
 
     return {
@@ -270,13 +388,21 @@ export default {
       leaderboard,
       topPlayers,
       remainingPlayers,
+      displayedPlayers,
+      displayedCount,
+      isLoadingMore,
+      scrollSentinel,
       currentUser,
+      currentUserRank,
+      currentUserCardRef,
       userProfile,
       leaderboardService,
       fetchLeaderboard,
       isCurrentUser,
       goToProfile,
-      triggerConfetti
+      triggerConfetti,
+      loadMorePlayers,
+      scrollToMyRank
     }
   }
 }
@@ -334,6 +460,75 @@ export default {
   padding: 1rem 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Floating navigation buttons container */
+.floating-nav-buttons {
+  position: fixed;
+  bottom: 5vh;
+  right: 10vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+.floating-nav-buttons :deep(.back-to-top) {
+  position: relative !important;
+  bottom: auto !important;
+  right: auto !important;
+}
+
+.find-me-floating {
+  width: 50px;
+  height: 50px;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  transition: all 0.2s ease;
+}
+
+.find-me-floating:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.5);
+  background: linear-gradient(135deg, #45a049, #3d8b40);
+}
+
+.find-me-floating i {
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.find-me-rank {
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.highlighted-user {
+  background-color: #fff0f0 !important;
+  border: 2px solid #FF6B6B !important;
+  box-shadow: 0 0 15px rgba(255, 107, 107, 0.3) !important;
+}
+
+@keyframes pulse-highlight {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 107, 107, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 107, 107, 0.6);
+  }
+}
+
+.pulse-highlight {
+  animation: pulse-highlight 0.5s ease-in-out 3;
 }
 
 .page-title {
@@ -634,7 +829,33 @@ export default {
   }
 }
 
+/* Infinite scroll styles */
+.scroll-sentinel {
+  width: 100%;
+  padding: 1rem;
+  text-align: center;
+}
+
+.loading-more {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.loading-more i {
+  margin-right: 0.5rem;
+}
+
 @media (max-width: 576px) {
+  .floating-nav-buttons {
+    bottom: 20vh;
+    right: 5vh;
+  }
+
+  .find-me-floating {
+    width: 50px;
+    height: 50px;
+  }
+
   .page-title {
     font-size: 2rem;
   }

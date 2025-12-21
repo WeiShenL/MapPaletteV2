@@ -85,7 +85,12 @@
           </div>
         </div>
         <p v-else class="text-center">No friends match your search.</p>
-        <div class="text-center" v-if="displayedFriends < filteredFriends.length">
+        
+        <!-- Friends scroll sentinel -->
+        <div ref="friendsSentinel" class="scroll-sentinel" v-if="displayedFriends < filteredFriends.length">
+          <div class="loading-more" v-if="isLoadingMoreFriends">
+            <i class="fas fa-spinner fa-spin"></i> Loading more friends...
+          </div>
         </div>
 
         <!-- Other Users Section with Load More -->
@@ -130,7 +135,12 @@
           </div>
         </div>
         <p v-else class="text-center">No other users match your search.</p>
-        <div class="text-center" v-if="displayedOtherUsers < filteredOtherUsers.length">
+        
+        <!-- Other Users scroll sentinel -->
+        <div ref="otherUsersSentinel" class="scroll-sentinel" v-if="displayedOtherUsers < filteredOtherUsers.length">
+          <div class="loading-more" v-if="isLoadingMoreOtherUsers">
+            <i class="fas fa-spinner fa-spin"></i> Loading more users...
+          </div>
         </div>
       </div>
     </div>
@@ -202,6 +212,10 @@ export default {
     const displayedFriends = ref(6);
     const displayedOtherUsers = ref(6);
     const friendToUnfollow = ref(null);
+    const isLoadingMoreFriends = ref(false);
+    const isLoadingMoreOtherUsers = ref(false);
+    const friendsSentinel = ref(null);
+    const otherUsersSentinel = ref(null);
     const disableButtons = ref(false);
     const isLoading = ref(true);
     const hoveringFriend = ref(null);
@@ -309,11 +323,69 @@ export default {
     };
 
     const loadMoreFriends = () => {
-      displayedFriends.value += 6;
+      if (isLoadingMoreFriends.value) return;
+      if (displayedFriends.value >= filteredFriends.value.length) return;
+      
+      isLoadingMoreFriends.value = true;
+      setTimeout(() => {
+        displayedFriends.value += 6;
+        isLoadingMoreFriends.value = false;
+      }, 200);
     };
 
     const loadMoreOtherUsers = () => {
-      displayedOtherUsers.value += 6;
+      if (isLoadingMoreOtherUsers.value) return;
+      if (displayedOtherUsers.value >= filteredOtherUsers.value.length) return;
+      
+      isLoadingMoreOtherUsers.value = true;
+      setTimeout(() => {
+        displayedOtherUsers.value += 6;
+        isLoadingMoreOtherUsers.value = false;
+      }, 200);
+    };
+
+    const setupInfiniteScroll = () => {
+      const observerOptions = {
+        root: null,
+        rootMargin: '100px',
+        threshold: 0.1
+      };
+
+      // Observer for friends section
+      const friendsObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !isLoadingMoreFriends.value) {
+            loadMoreFriends();
+          }
+        });
+      }, observerOptions);
+
+      // Observer for other users section
+      const usersObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && !isLoadingMoreOtherUsers.value) {
+            loadMoreOtherUsers();
+          }
+        });
+      }, observerOptions);
+
+      // Watch for sentinel elements and observe them
+      const watchSentinels = () => {
+        if (friendsSentinel.value) {
+          friendsObserver.observe(friendsSentinel.value);
+        }
+        if (otherUsersSentinel.value) {
+          usersObserver.observe(otherUsersSentinel.value);
+        }
+      };
+
+      // Use nextTick to ensure DOM is ready
+      setTimeout(watchSentinels, 100);
+
+      return () => {
+        friendsObserver.disconnect();
+        usersObserver.disconnect();
+      };
     };
 
     const openProfile = (user) => {
@@ -356,18 +428,12 @@ export default {
       }
     };
 
-    onMounted(() => {
-      const handleScroll = () => {
-        if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 200) {
-          loadMoreFriends()
-          loadMoreOtherUsers()
-        }
-      }
-      window.addEventListener('scroll', handleScroll)
-      loadUsers()
-      onUnmounted(() => {
-        window.removeEventListener('scroll', handleScroll)
-      })
+    onMounted(async () => {
+      await loadUsers();
+      // Setup infinite scroll after data is loaded
+      setTimeout(() => {
+        setupInfiniteScroll();
+      }, 300);
     });
 
     return {
@@ -395,7 +461,11 @@ export default {
       loadMoreFriends,
       loadMoreOtherUsers,
       openProfile,
-      defaultProfileImg
+      defaultProfileImg,
+      isLoadingMoreFriends,
+      isLoadingMoreOtherUsers,
+      friendsSentinel,
+      otherUsersSentinel
     };
   }
 };
@@ -410,5 +480,21 @@ export default {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+}
+
+/* Infinite scroll styles */
+.scroll-sentinel {
+  width: 100%;
+  padding: 1rem;
+  text-align: center;
+}
+
+.loading-more {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.loading-more i {
+  margin-right: 0.5rem;
 }
 </style>

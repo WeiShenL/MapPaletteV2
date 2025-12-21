@@ -65,13 +65,16 @@
                               <div class="card-body">
                                   <h5 class="card-title mb-3">About</h5>
                                   <div class="about-items">
-                                      <div class="about-item">
+                                      <div v-if="userProfile.showLocation && userProfile.location" class="about-item">
                                           <i class="bi bi-geo-alt"></i>
                                           <span>Lives in {{ userProfile.location }}</span>
                                       </div>
-                                      <div class="about-item">
+                                      <div v-if="userProfile.showBirthday && userProfile.BirthdayDate" class="about-item">
                                           <i class="bi bi-calendar3"></i>
                                           <span>Birthday {{ userProfile.BirthdayDate }}</span>
+                                      </div>
+                                      <div v-if="(!userProfile.showLocation || !userProfile.location) && (!userProfile.showBirthday || !userProfile.BirthdayDate)" class="text-muted">
+                                          <small>No information to display</small>
                                       </div>
                                   </div>
                               </div>
@@ -263,9 +266,11 @@ export default {
       name: '',
       avatar: '',
       coverPhoto: '/resources/coverphoto_profile.jpg',
-      bio: '🏃‍♂️ Running enthusiast | Exploring Singapore one route at a time',
-      location: 'Singapore',
+      bio: '',
+      location: '',
       BirthdayDate: '',
+      showBirthday: true,
+      showLocation: true,
       stats: {
         routes: 0,
         following: 0,
@@ -299,10 +304,12 @@ export default {
         userProfile.value = {
           name: profileData.user.username,
           avatar: profileData.user.profilePicture || '/resources/images/default-profile.png',
-          coverPhoto: '/resources/coverphoto_profile.jpg',
-          bio: profileData.user.bio || '🏃‍♂️ Running enthusiast | Exploring Singapore one route at a time',
-          location: profileData.user.location || 'Singapore',
+          coverPhoto: profileData.user.coverPhoto || '/resources/coverphoto_profile.jpg',
+          bio: profileData.user.bio || '',
+          location: profileData.user.location || '',
           BirthdayDate: profileData.user.birthday ? new Date(profileData.user.birthday).toLocaleDateString() : '',
+          showBirthday: profileData.user.showBirthday ?? true,
+          showLocation: profileData.user.showLocation ?? true,
           stats: profileData.stats
         }
 
@@ -338,10 +345,12 @@ export default {
         userProfile.value = {
           name: profileData.user.username,
           avatar: profileData.user.profilePicture || '/resources/images/default-profile.png',
-          coverPhoto: '/resources/coverphoto_profile.jpg',
-          bio: profileData.user.bio || '🏃‍♂️ Running enthusiast | Exploring Singapore one route at a time',
-          location: profileData.user.location || 'Singapore',
+          coverPhoto: profileData.user.coverPhoto || '/resources/coverphoto_profile.jpg',
+          bio: profileData.user.bio || '',
+          location: profileData.user.location || '',
           BirthdayDate: profileData.user.birthday ? new Date(profileData.user.birthday).toLocaleDateString() : '',
+          showBirthday: profileData.user.showBirthday ?? true,
+          showLocation: profileData.user.showLocation ?? true,
           stats: profileData.stats
         }
 

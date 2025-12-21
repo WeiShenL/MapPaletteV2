@@ -30,10 +30,12 @@
     color: transparent !important;
 }
 
-.navbar-brand img {
+.navbar-logo {
     width: 40px;
     height: 40px;
     margin-right: 8px;
+    object-fit: contain;
+    transition: width 0.2s, height 0.2s;
 }
 
 /* Hamburger button styles */
@@ -98,8 +100,8 @@
 }
 
 /* Override Bootstrap's navbar-expand-sm behavior */
-@media (max-width: 576px) {
-    /* Force mobile layout */
+@media (max-width: 991px) {
+    /* Force mobile layout for tablets and smaller */
     .navbar-expand-sm {
         flex-wrap: wrap !important;
     }
@@ -126,7 +128,7 @@
         font-size: 1.25rem;
     }
 
-    .navbar-brand img {
+    .navbar-logo {
         width: 32px;
         height: 32px;
         margin-right: 6px;
@@ -136,6 +138,9 @@
         background-color: white;
         padding: 1rem;
         margin: 0 -0.5rem;
+        border-radius: 0 0 8px 8px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin-top: 0.5rem;
     }
 
     .navbar .navbar-nav {
@@ -156,7 +161,7 @@
     }
 }
 
-@media (min-width: 577px) {
+@media (min-width: 992px) {
     .navbar-expand-sm .navbar-collapse {
         display: flex !important;
     }

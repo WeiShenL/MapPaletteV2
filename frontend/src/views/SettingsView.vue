@@ -79,10 +79,33 @@
                   </div>
                 </div>                                
 
+                <!-- Cover Photo -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">Cover Photo</h6>
+                  <div class="cover-photo-preview mb-3">
+                    <img :src="userProfile.coverPhoto || '/resources/coverphoto_profile.jpg'" 
+                      alt="Cover Photo" 
+                      class="img-fluid rounded">
+                  </div>
+                  <input type="file" ref="coverInput" @change="handleCoverUpload" accept="image/*" style="display: none;">
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" @click="$refs.coverInput.click()">
+                      <i class="bi bi-image me-1"></i>
+                      Change Cover
+                    </button>
+                    <button v-if="userProfile.coverPhoto" 
+                        class="btn btn-outline-danger" 
+                        @click="removeCoverPhoto">
+                      <i class="bi bi-trash me-1"></i>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
                 <!-- Username Form -->
-                <form class="profile-form">
+                <form class="profile-form" @submit.prevent>
                   <div class="mb-3">
-                    <label class="form-label">Username</label>
+                    <label class="form-label fw-bold">Username</label>
                     <div class="input-group">
                       <input type="text" class="form-control" v-model="userProfile.username">
                       <button class="btn btn-outline-secondary" type="button" @click="updateUsername">
@@ -90,6 +113,55 @@
                       </button>
                     </div>
                   </div>
+
+                  <!-- Bio -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">Bio / Tagline</label>
+                    <textarea 
+                      class="form-control" 
+                      v-model="userProfile.bio" 
+                      rows="3" 
+                      maxlength="200"
+                      placeholder="Tell others about yourself..."></textarea>
+                    <small class="text-muted">{{ (userProfile.bio || '').length }}/200 characters</small>
+                  </div>
+
+                  <!-- Location -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">Location</label>
+                    <div class="input-group">
+                      <span class="input-group-text"><i class="bi bi-geo-alt"></i></span>
+                      <input type="text" class="form-control" v-model="userProfile.location" placeholder="e.g., Singapore">
+                    </div>
+                  </div>
+
+                  <!-- Birthday -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">Birthday</label>
+                    <input type="date" class="form-control" v-model="userProfile.birthday">
+                  </div>
+
+                  <!-- Visibility Toggles -->
+                  <div class="mb-4">
+                    <h6 class="fw-bold mb-3">Visibility Settings</h6>
+                    <div class="form-check form-switch mb-2">
+                      <input class="form-check-input" type="checkbox" id="showLocation" v-model="userProfile.showLocation">
+                      <label class="form-check-label" for="showLocation">
+                        <i class="bi bi-geo-alt me-1"></i> Show location on profile
+                      </label>
+                    </div>
+                    <div class="form-check form-switch mb-2">
+                      <input class="form-check-input" type="checkbox" id="showBirthday" v-model="userProfile.showBirthday">
+                      <label class="form-check-label" for="showBirthday">
+                        <i class="bi bi-calendar3 me-1"></i> Show birthday on profile
+                      </label>
+                    </div>
+                  </div>
+
+                  <!-- Save Profile Button -->
+                  <button class="btn btn-primary" @click="saveProfileInfo">
+                    <i class="bi bi-check-lg me-1"></i> Save Profile
+                  </button>
                 </form>
               </div>
 
@@ -187,7 +259,14 @@ export default {
     const userProfile = ref({
       username: '',
       avatar: '/resources/images/default-profile.png',
+      coverPhoto: '',
+      bio: '',
+      location: '',
+      birthday: '',
+      showBirthday: true,
+      showLocation: true,
     });
+    const coverInput = ref(null);
     const navbarUserProfile = ref(null);
     const navItems = ref([
         { id: 'profile', icon: 'bi bi-person', label: 'Profile Settings', description: 'Manage your personal information' },
@@ -313,6 +392,77 @@ export default {
         setAlert('error', 'An error occurred while removing the profile picture.');
       }
     };
+
+    const handleCoverUpload = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) {
+        setAlert('error', 'Invalid file type. Please upload a JPEG, PNG, or WebP image.');
+        return;
+      }
+
+      // Validate file size (10MB max for cover photos)
+      const maxSize = 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        setAlert('error', 'File too large. Maximum size is 10MB.');
+        return;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('coverPhoto', file);
+
+        const uploadResponse = await axios.post(
+          `/api/users/upload-cover-photo/${currentUser.value.id}`,
+          formData,
+          {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: 30000
+          }
+        );
+
+        if (uploadResponse.data && uploadResponse.data.url) {
+          userProfile.value.coverPhoto = uploadResponse.data.url;
+          setAlert('success', 'Cover photo updated successfully!');
+        } else {
+          setAlert('error', 'Failed to upload cover photo. Please try again.');
+        }
+      } catch (error) {
+        console.error('Error uploading cover photo:', error);
+        setAlert('error', error.response?.data?.message || 'An error occurred while uploading the cover photo.');
+      }
+      event.target.value = '';
+    };
+
+    const removeCoverPhoto = async () => {
+      try {
+        await axios.put(`/api/users/update/coverPhoto/${currentUser.value.id}`, { coverPhoto: null });
+        userProfile.value.coverPhoto = '';
+        setAlert('success', 'Cover photo removed successfully.');
+      } catch (error) {
+        console.error('Error removing cover photo:', error);
+        setAlert('error', 'An error occurred while removing the cover photo.');
+      }
+    };
+
+    const saveProfileInfo = async () => {
+      try {
+        await axios.put(`/api/users/${currentUser.value.id}/profile-info`, {
+          bio: userProfile.value.bio,
+          location: userProfile.value.location,
+          birthday: userProfile.value.birthday,
+          showBirthday: userProfile.value.showBirthday,
+          showLocation: userProfile.value.showLocation,
+        });
+        setAlert('success', 'Profile information saved successfully!');
+      } catch (error) {
+        console.error('Error saving profile info:', error);
+        setAlert('error', error.response?.data?.message || 'An error occurred while saving profile information.');
+      }
+    };
     
     const savePrivacySettings = async () => {
       destroyTooltips();
@@ -341,7 +491,13 @@ export default {
           
           userProfile.value = {
             username: userData.username || '',
-            avatar: userData.profilePicture || '/resources/images/default-profile.png'
+            avatar: userData.profilePicture || '/resources/images/default-profile.png',
+            coverPhoto: userData.coverPhoto || '',
+            bio: userData.bio || '',
+            location: userData.location || '',
+            birthday: userData.birthday || '',
+            showBirthday: userData.showBirthday ?? true,
+            showLocation: userData.showLocation ?? true,
           };
           navbarUserProfile.value = {
             name: userData.username || '',
@@ -393,11 +549,15 @@ export default {
       alertType,
       alertMessage,
       fileInput,
+      coverInput,
       photoAlert,
       switchTab,
       updateUsername,
       handleImageUpload,
       removeProfilePicture,
+      handleCoverUpload,
+      removeCoverPhoto,
+      saveProfileInfo,
       savePrivacySettings,
     };
   }

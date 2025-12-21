@@ -304,3 +304,39 @@ html, body {
         height: 120px;
     }
 }
+
+/* Cover Photo Preview */
+.cover-photo-preview {
+    width: 100%;
+    max-height: 200px;
+    overflow: hidden;
+    border-radius: 8px;
+    background-color: #f0f0f0;
+}
+
+.cover-photo-preview img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+/* Form switch styles */
+.form-check.form-switch {
+    padding-left: 2.5em;
+}
+
+.form-check.form-switch .form-check-input {
+    width: 3em;
+    height: 1.5em;
+    cursor: pointer;
+}
+
+.form-check.form-switch .form-check-input:checked {
+    background-color: var(--primary-color);
+    border-color: var(--primary-color);
+}
+
+.form-check.form-switch .form-check-label {
+    cursor: pointer;
+    padding-top: 0.15rem;
+}

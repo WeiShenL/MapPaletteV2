@@ -1,11 +1,15 @@
 const { db } = require('/app/shared/utils/db');
 const { cache } = require('/app/shared/utils/redis');
+const { censorProfanity } = require('/app/shared/utils/profanityFilter');
 
 // Create a new user (called after Supabase auth creates the user)
 // NOTE: This is typically not needed as the auth trigger handles user creation
 // This endpoint is kept for manual user creation or profile completion
 const createUser = async (req, res) => {
-  const { email, username, profilePicture, birthday, gender, userId } = req.body;
+  let { email, username, profilePicture, birthday, gender, userId } = req.body;
+
+  // Censor profanity in username
+  username = censorProfanity(username);
 
   // Only email, username, and userId are required
   // birthday and gender are optional
@@ -71,8 +75,13 @@ const getUserById = async (req, res) => {
         email: true,
         username: true,
         profilePicture: true,
+        coverPhoto: true,
+        bio: true,
+        location: true,
         birthday: true,
         gender: true,
+        showBirthday: true,
+        showLocation: true,
         isProfilePrivate: true,
         isPostPrivate: true,
         numFollowers: true,
@@ -326,11 +335,14 @@ const getUserLikedPosts = async (req, res) => {
 // Update username (requires ownership - checked by middleware)
 const updateUsername = async (req, res) => {
   const { userID } = req.params;
-  const { username } = req.body;
+  let { username } = req.body;
 
   if (!username) {
     return res.status(400).json({ message: 'Username is required' });
   }
+
+  // Censor profanity in username
+  username = censorProfanity(username);
 
   try {
     // Check if username is taken
@@ -398,6 +410,121 @@ const updatePrivacySettings = async (req, res) => {
   } catch (error) {
     console.error(`[UPDATE_PRIVACY] Error:`, error);
     return res.status(500).json({ message: 'Error updating privacy', error: error.message });
+  }
+};
+
+// Update profile info (bio, location, birthday, visibility settings)
+const updateProfileInfo = async (req, res) => {
+  const { userID } = req.params;
+  let { bio, location, birthday, showBirthday, showLocation } = req.body;
+
+  // Censor profanity in bio and location
+  bio = censorProfanity(bio);
+  location = censorProfanity(location);
+
+  try {
+    const updateData = {};
+    
+    if (bio !== undefined) updateData.bio = bio;
+    if (location !== undefined) updateData.location = location;
+    if (birthday !== undefined) updateData.birthday = birthday;
+    if (showBirthday !== undefined) updateData.showBirthday = showBirthday;
+    if (showLocation !== undefined) updateData.showLocation = showLocation;
+
+    const user = await db.user.update({
+      where: { id: userID },
+      data: updateData,
+    });
+
+    await cache.del(`user:${userID}`);
+
+    console.log(`[UPDATE_PROFILE_INFO] Updated profile info for user ${userID}`);
+
+    return res.json({ message: 'Profile info updated', user });
+  } catch (error) {
+    console.error(`[UPDATE_PROFILE_INFO] Error:`, error);
+    return res.status(500).json({ message: 'Error updating profile info', error: error.message });
+  }
+};
+
+// Update cover photo URL
+const updateCoverPhoto = async (req, res) => {
+  const { userID } = req.params;
+  const { coverPhoto } = req.body;
+
+  try {
+    const user = await db.user.update({
+      where: { id: userID },
+      data: { coverPhoto },
+    });
+
+    await cache.del(`user:${userID}`);
+
+    return res.json({ message: 'Cover photo updated', user });
+  } catch (error) {
+    console.error(`[UPDATE_COVER_PHOTO] Error:`, error);
+    return res.status(500).json({ message: 'Error updating cover photo', error: error.message });
+  }
+};
+
+// Upload cover photo (using Supabase Storage)
+const uploadCoverPhoto = async (req, res) => {
+  const { userID } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  try {
+    const { uploadImage, BUCKETS } = require('/app/shared/utils/storageService');
+    const crypto = require('crypto');
+
+    // Generate unique filename for cover photo
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(8).toString('hex');
+    const filename = `${userID}/cover-${timestamp}-${random}.webp`;
+
+    // Upload to Supabase Storage (use profile-pictures bucket or create a cover-photos bucket)
+    const uploadResult = await uploadImage({
+      file: req.file.buffer,
+      bucket: BUCKETS.PROFILE_PICTURES, // Reuse profile-pictures bucket for now
+      userId: userID,
+      filename: filename,
+      contentType: 'image/webp',
+      metadata: {
+        type: 'cover-photo',
+        originalName: req.file.originalname,
+      }
+    });
+
+    if (!uploadResult.success) {
+      return res.status(500).json({
+        message: 'Failed to upload cover photo to storage',
+        error: uploadResult.error
+      });
+    }
+
+    const publicUrl = uploadResult.publicUrl;
+
+    // Update user cover photo in database
+    await db.user.update({
+      where: { id: userID },
+      data: { coverPhoto: publicUrl },
+    });
+
+    // Clear cache
+    await cache.del(`user:${userID}`);
+
+    console.log(`[UPLOAD_COVER_PHOTO] Success: ${userID} -> ${publicUrl}`);
+
+    return res.json({
+      message: 'Cover photo uploaded successfully',
+      coverPhoto: publicUrl,
+      url: publicUrl
+    });
+  } catch (error) {
+    console.error(`[UPLOAD_COVER_PHOTO] Error:`, error);
+    return res.status(500).json({ message: 'Error uploading cover photo', error: error.message });
   }
 };
 
@@ -618,6 +745,56 @@ const assignDefaultProfilePicture = async (req, res) => {
   }
 };
 
+// Get platform-wide stats (total users, total routes)
+const getPlatformStats = async (req, res) => {
+  try {
+    // Try to get from cache first (cache for 5 minutes)
+    const cacheKey = 'platform:stats';
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
+    // Get total active users count
+    const totalUsers = await db.user.count({
+      where: { isDeleted: false }
+    });
+
+    // Get total posts/routes count
+    const totalRoutes = await db.post.count({
+      where: { isDeleted: false }
+    });
+
+    // Get users who posted in the last 30 days (active runners)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const activeRunners = await db.user.count({
+      where: {
+        isDeleted: false,
+        OR: [
+          { createdAt: { gte: thirtyDaysAgo } },
+          { updatedAt: { gte: thirtyDaysAgo } }
+        ]
+      }
+    });
+
+    const stats = {
+      totalUsers,
+      totalRoutes,
+      activeRunners: activeRunners || totalUsers // Fallback to total users if none active
+    };
+
+    // Cache for 5 minutes
+    await cache.set(cacheKey, stats, 300);
+
+    return res.json(stats);
+  } catch (error) {
+    console.error(`[GET_PLATFORM_STATS] Error:`, error);
+    return res.status(500).json({ message: 'Error fetching platform stats', error: error.message });
+  }
+};
+
 module.exports = {
   createUser,
   getUserById,
@@ -629,6 +806,9 @@ module.exports = {
   updateUsername,
   updateProfilePicture,
   updatePrivacySettings,
+  updateProfileInfo,
+  updateCoverPhoto,
+  uploadCoverPhoto,
   deleteUser,
   updateUserPoints,
   updateUserCount,
@@ -636,4 +816,5 @@ module.exports = {
   getUsersForLeaderboard,
   uploadProfilePicture,
   assignDefaultProfilePicture,
+  getPlatformStats,
 };
