@@ -147,20 +147,46 @@ const getAllRoutes = async (req, res) => {
     
     console.log(`[GET_ALL_ROUTES] Fetching routes - page: ${page}, limit: ${limit}, sortBy: ${sortBy}, search: ${search}, userId: ${userId}`);
     
-    // Fetch all posts from post service
-    const postsResponse = await axios.get(`${POST_SERVICE_URL}/allposts`);
-    let posts = postsResponse.data;
-
-    // Ensure posts is an array
-    if (!Array.isArray(posts)) {
-      if (posts && typeof posts === 'object' && posts.posts && Array.isArray(posts.posts)) {
-        posts = posts.posts;
-      } else if (posts && typeof posts === 'object' && posts.data && Array.isArray(posts.data)) {
-        posts = posts.data;
-      } else {
-        posts = [];
+    // Fetch all posts from post service (request max 100 per call, then paginate through if needed)
+    let allPosts = [];
+    let cursor = null;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const url = cursor 
+        ? `${POST_SERVICE_URL}/allposts?limit=100&cursor=${cursor}`
+        : `${POST_SERVICE_URL}/allposts?limit=100`;
+      
+      const postsResponse = await axios.get(url);
+      let responseData = postsResponse.data;
+      
+      // Extract posts array
+      let posts = responseData;
+      if (!Array.isArray(posts)) {
+        if (posts && typeof posts === 'object' && posts.posts && Array.isArray(posts.posts)) {
+          posts = posts.posts;
+        } else if (posts && typeof posts === 'object' && posts.data && Array.isArray(posts.data)) {
+          posts = posts.data;
+        } else {
+          posts = [];
+        }
+      }
+      
+      allPosts = [...allPosts, ...posts];
+      
+      // Check if there are more posts
+      hasMore = responseData.pagination?.hasMore || false;
+      cursor = responseData.pagination?.nextCursor || null;
+      
+      // Safety limit to prevent infinite loops
+      if (allPosts.length > 1000) {
+        console.log(`[GET_ALL_ROUTES] Safety limit reached, stopping at ${allPosts.length} posts`);
+        break;
       }
     }
+    
+    let posts = allPosts;
+    console.log(`[GET_ALL_ROUTES] Fetched ${posts.length} total posts`);
 
     // Search filter
     if (search && Array.isArray(posts)) {

@@ -163,10 +163,16 @@
               </template>
             </div>
 
-            <!-- Load More Button -->
-            <div class="text-center mt-4" v-if="hasMore">
-              <button class="btn btn-outline-primary" @click="loadMoreRoutes">Load More</button>
+            <!-- Load More Button / Loading Indicator -->
+            <div class="text-center mt-4 mb-4" v-if="hasMore">
+              <div v-if="isLoadingMore" class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+              </div>
+              <button v-else class="btn btn-outline-primary" @click="loadMoreRoutes">Load More</button>
             </div>
+            
+            <!-- Infinite Scroll Sentinel -->
+            <div ref="scrollSentinel" class="scroll-sentinel"></div>
           </div>
         </div>
       </div>
@@ -234,8 +240,10 @@ export default {
     const currentPage = ref(1);
     const totalPages = ref(1);
     const hasMore = ref(false);
+    const isLoadingMore = ref(false);
     const searchQuery = ref('');
     const searchInput = ref(null);
+    const scrollSentinel = ref(null);
     const userProfile = ref(null);
     const filters = ref({
       sortOption: 'Most Popular'
@@ -331,9 +339,12 @@ export default {
     };
 
     const loadMoreRoutes = () => {
-      if (hasMore.value) {
+      if (hasMore.value && !isLoadingMore.value) {
+        isLoadingMore.value = true;
         currentPage.value++;
-        fetchRoutes();
+        fetchRoutes().finally(() => {
+          isLoadingMore.value = false;
+        });
       }
     };
 
@@ -380,11 +391,35 @@ export default {
     };
 
     let handleUserLoaded;
+    let observer = null;
+
+    // Setup Intersection Observer for infinite scroll
+    const setupInfiniteScroll = () => {
+      if (observer) {
+        observer.disconnect();
+      }
+      
+      observer = new IntersectionObserver((entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && hasMore.value && !isLoadingMore.value && !isLoading.value) {
+          loadMoreRoutes();
+        }
+      }, {
+        rootMargin: '200px', // Load more when 200px before reaching the sentinel
+        threshold: 0
+      });
+      
+      if (scrollSentinel.value) {
+        observer.observe(scrollSentinel.value);
+      }
+    };
 
     onMounted(() => {
       const initializeApp = async () => {
         try {
           await fetchRoutes(true);
+          // Setup infinite scroll after initial data load
+          setTimeout(() => setupInfiniteScroll(), 100);
         } catch (error) {
           console.error('Error during initialization:', error);
         }
@@ -451,11 +486,15 @@ export default {
       if (handleUserLoaded) {
         window.removeEventListener('userLoaded', handleUserLoaded);
       }
+      if (observer) {
+        observer.disconnect();
+      }
     });
 
     return {
       isLoading,
       isFilterLoading,
+      isLoadingMore,
       filteredRoutes,
       normalizedRoutes,
       selectedRoute,
@@ -463,6 +502,7 @@ export default {
       hasMore,
       searchQuery,
       searchInput,
+      scrollSentinel,
       userProfile,
       showAlert,
       alertType,
@@ -487,5 +527,9 @@ export default {
 /* Import styles from routes.css */
 @import '@/assets/styles/routes.css';
 
+.scroll-sentinel {
+  height: 1px;
+  width: 100%;
+}
 </style>
 
