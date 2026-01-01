@@ -2,6 +2,8 @@
 
 **A professional, scalable social media platform for runners** built with modern web technologies and microservices architecture.
 
+![Website Demo](DEMO.gif)
+
 ## Features
 
 - 🏃 Create and share running routes with interactive map creation
